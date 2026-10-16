@@ -24,7 +24,7 @@ Open http://127.0.0.1:8421/. The launcher creates a Python environment and insta
 4. Inspect each attempt with timestamped evidence, actual model inputs, video, 3D playback and joint feedback.
 5. Save human corrections and export review JSON as needed.
 
-The supported gateway model is **HORIZON-MiniMax**, with multi-image Chat Completions support. Configuration alone does not call the model. Analysis uses the operator's own API quota.
+The supported gateway model is **HORIZON-MiniMax**, with multi-image Chat Completions support. Connect to the company network or VPN before accessing an internal gateway. Configuration alone does not call the model. Analysis uses the operator's own API quota.
 
 Each operator runs their own local instance. Keys are stored in `workspace/taskflow/minimax-local.json` with owner-only permissions and are never returned to the browser. Recordings remain read-only. Reviews, caches and exports are stored in `workspace/`; credentials, recordings and model weights are excluded from the source repository.
 

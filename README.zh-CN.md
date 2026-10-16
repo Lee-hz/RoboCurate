@@ -26,7 +26,7 @@ sudo apt-get install -y python3-venv ffmpeg
 4. **核对结果**：查看每次尝试的完成条件、证据和实际模型输入，通过时间轴联动录像、3D 和关节反馈。
 5. **人工复核**：保存修订和保留结论，按需导出审核 JSON。
 
-接入使用公司网关中的图像模型 `HORIZON-MiniMax`。接口须支持多图 Chat Completions；不会切换到其他模型。保存配置不调用模型，任务分析按使用者自己的 API 额度计费。
+接入使用公司网关中的图像模型 `HORIZON-MiniMax`。接口须支持多图 Chat Completions；不会切换到其他模型。访问公司内网接口前，需连接公司网络或 VPN。保存配置不调用模型，任务分析按使用者自己的 API 额度计费。
 
 每个人在自己的电脑运行。API Key 保存在本机 `workspace/taskflow/minimax-local.json`，权限为 `0600`，页面不回显。原始记录只读；审核结果、缓存和导出保存在 `workspace/`。源码不包含密钥、录像或模型权重。
 

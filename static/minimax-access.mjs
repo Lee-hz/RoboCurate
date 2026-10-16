@@ -5,7 +5,7 @@ export function installMiniMaxAccess(api) {
   dialog.innerHTML=`<form class="minimax-form">
     <header><div><h2 id="minimax-title">MiniMax 接入</h2><p id="minimax-status" role="status">正在读取…</p></div><button type="button" data-close aria-label="关闭 MiniMax 接入">×</button></header>
     <div class="minimax-model"><span>支持模型</span><strong>HORIZON-MiniMax</strong></div>
-    <p class="minimax-note">请使用公司网关的接口地址及对应 API Key。</p>
+    <p class="minimax-note">请使用公司网关的接口地址及对应 API Key；内网接口需连接公司网络或 VPN。</p>
     <label>接口地址<input name="endpoint" type="url" required autocomplete="off" spellcheck="false" placeholder="https://你的网关/v1/chat/completions"></label>
     <label>API Key<input name="api_key" type="password" autocomplete="new-password" maxlength="8192" spellcheck="false" placeholder="填写自己的 API Key"></label>
     <p class="minimax-note" id="minimax-key-note">密钥仅保存到本机，不会随项目上传。</p>

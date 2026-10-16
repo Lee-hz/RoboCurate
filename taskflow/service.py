@@ -40,6 +40,7 @@ VERIFY_PROMPT='''核查目标录像指定区间内各动作的阶段目标。已
 
 STATE_PROMPT_VERSION='reference-goals-state-v1'
 STATE_RULES='\n补充的机器人信息来自已核实的反馈通道和规则计算。它用于确定动作时机，不是目标完成标签。\n身体关节、手指或腕部的变化不能证明接触、抓住、入篮或整机退出。腕部位移是相对骨盆的运动，不能当作世界坐标位移。\n多路相机有各自实际时间戳。必须使用目标录像证据；透过容器壁看到物体颜色或轮廓，不足以证明物体在容器内部。\n后续物体在目标区外，只能支持未保持在目标区；没有可见跨边沿运动时，不得编造先成功再掉出的过程。\n每个目标条件额外给出observability：direct（直接可核对）、limited（遮挡或只能间接推断）、unknown（证据缺失）。仅direct可以给出完成或未完成；其余必须uncertain。\n候选动作时刻不是最终阶段或尝试边界，不要把每次细小的手指调整当成新阶段。'
+STATE_REFERENCE_RULES=STATE_RULES.split('\n每个目标条件额外给出observability：',1)[0]+'\n这是范本定义步骤，不是条件判断步骤。task.stages[].success_criteria 必须是字符串数组，每个字符串只描述应达到的目标状态；不得将条件改成 condition/observability/note 对象。观测限制写入 task.uncertainties，条件的 observability 和 status 留待后续目标检查时输出。'
 STATE_VERIFY_PROMPT=VERIFY_PROMPT.replace('本区间前后1.5秒画面只作上下文；','给出的观察范围可以包含本区间结束后的画面，用于核对结果；').replace('"criterion_index":0,"status"','"criterion_index":0,"observability":"direct","status"')+STATE_RULES
 
 
@@ -377,7 +378,7 @@ class TaskflowService:
             self.progress(id,12,'根据画面识别任务阶段，允许重复和回退')
             interval=json.dumps(scope)
             if job['kind']=='reference':
-                response=self._complete(id,TASK_PROMPT+'\n视频范围：'+interval+'\n用户补充：'+job['instruction']+state_hint+(STATE_RULES if evidence else ''),frames)
+                response=self._complete(id,TASK_PROMPT+'\n视频范围：'+interval+'\n用户补充：'+job['instruction']+state_hint+(STATE_REFERENCE_RULES if evidence else ''),frames)
                 spec=contracts.task_spec({**response.get('task',{}),'origin':'vlm_proposal'});reference_frames=[]
             else:
                 spec=template['spec'];reference_asset=self.get('assets',template['asset_id']);self.media.unchanged(reference_asset)
