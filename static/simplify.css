@@ -33,3 +33,5 @@
 .stage-live{margin-bottom:8px}
 .stage-route{margin-top:14px}
 @media(max-width:600px){.detail-more>summary{padding:11px 7px}.stage-timeline-heading{gap:8px}.warp-timeline .warp-now{white-space:normal;text-align:right}.stage-review-tools select{flex-basis:auto}.stage-review-tools button{flex:none}}
+
+.curation-status{color:var(--muted);font-size:12px;line-height:1.7;margin:8px 0 14px}.curation-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}.curation-actions .muted{font-size:11px}

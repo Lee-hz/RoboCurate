@@ -1,6 +1,8 @@
 # RoboCurate
 
-A local workbench for robot demonstrations: synchronized cameras and motion, explainable data quality, task-stage evidence, and traceable human decisions.
+**Reference-driven review:** connect a company vision-language service to infer task stages and observable goals from a reference demo, then review each attempt with timestamped evidence and separate human corrections. See [workflow setup and limits](docs/TASKFLOW.md).
+
+A local workbench for robot demonstrations: synchronized cameras and motion, VLM stage and goal evidence, and traceable human decisions.
 
 [中文说明](README.zh-CN.md) · [Models](docs/MODELS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
@@ -8,38 +10,24 @@ A local workbench for robot demonstrations: synchronized cameras and motion, exp
 
 ## Download
 
-- [Download the v0.1.0-preview.3 source package](https://github.com/Lee-hz/RoboCurate/releases/download/v0.1.0-preview.3/RoboCurate-v0.1.0-preview.3-source.zip), or open [Releases](https://github.com/Lee-hz/RoboCurate/releases) and select the ZIP under **Assets**.
+- Historical release (before this VLM update): [Download the v0.1.0-preview.3 source package](https://github.com/Lee-hz/RoboCurate/releases/download/v0.1.0-preview.3/RoboCurate-v0.1.0-preview.3-source.zip), or open [Releases](https://github.com/Lee-hz/RoboCurate/releases) and select the ZIP under **Assets**.
 - For the latest source, choose **Code → Download ZIP** on the repository page, or [download main](https://github.com/Lee-hz/RoboCurate/archive/refs/heads/main.zip).
 
 Extract the ZIP and follow the instructions below. This is a source distribution for local setup, not a standalone installer. Recordings are excluded. Trained weights are available in a separate [model pack](https://github.com/Lee-hz/RoboCurate/releases/download/v0.1.0-preview.3/RoboCurate-v0.1.0-preview.3-models.zip); the installer below works with **Code → Download ZIP** too.
 
-## Interface
+## Current workflow
 
-The actual RoboCurate workspace reviewing a G1 banana-transfer recording: synchronized camera views, robot-state playback, a ten-point technical score and task-stage evidence from the installed `g1-stage-v3` model. These are direct application screenshots. The recording remains private; the exact stage checkpoint used for the screenshots is now included in the downloadable model pack.
+1. Open **MiniMax 接入** in the top bar. Enter your own image-capable company gateway endpoint and API key, then save.
+2. Add local MCAP recordings or upload a reference video.
+3. Parse the reference into stage definitions and observable completion criteria; inspect and edit the proposal.
+4. Open another recording, select the template, and start MiniMax review.
+5. Review individual attempts with synchronized video, 3D motion, joint feedback, model-input evidence and human corrections.
 
-![RoboCurate: real G1 cameras, recorded pose ghosts, control targets and task-stage evidence](docs/images/task-workspace.png)
+The current product focuses on VLM task review. Historical technical scores are not acceptance criteria. Generated templates are editable proposals; a separate approval/activation state is not yet implemented.
 
-The purple ghosts show three measured poses from the preceding five seconds. The cyan overlay shows the recorded control-target pose; dashed curves show target trajectories.
+Each person runs a local instance and uses their own API quota. The connection form uses **HORIZON-MiniMax**, an image-capable company Chat Completions model, with no OG fallback. This is not a universal alias for arbitrary MiniMax public API models. Save does not call the model; connection success is reported after a successful task request.
 
-<details>
-<summary>Pose ghosts, target comparison and camera detail</summary>
-
-![G1 recorded pose ghosts, control-target overlay and technical-quality review](docs/images/motion-quality.png)
-
-![Real camera frames and banana-transfer stage evidence](docs/images/task-cameras.png)
-
-</details>
-
-## Features
-
-- Review native ROS 2 MCAP recordings using synchronized camera frames, G1 motion and joint curves.
-- Three primary views: **Task**, **Quality checks**, and **Review**. Advanced curves and raw channels are under **More**.
-- Technical quality on a **0–10 scale**, with measured dimensions and auditable weights. Grade gates remain independent.
-- With an installed stage model, navigate five task phases, inspect probabilities and missing inputs, and replay uncertain segments.
-- Save human decisions and selected ranges; export a manifest or a generic NPZ/JPEG training bundle with timestamps and validity masks.
-- Optionally use the separate WARP relative-progress model for action-chunk weights.
-
-The UI is currently Chinese. The data adapter targets G1 recordings with 29 body joints, two six-dimensional hands and up to three cameras. It does not automatically support arbitrary robot layouts. Stage predictions and technical scores do not certify task success.
+Credentials are stored only in `workspace/taskflow/minimax-local.json`, with owner-only file permissions. They are never returned by the settings API or stored in browser storage, and are excluded from source packages. This is a local API connection, not a website account or multi-user login system. See [setup and limits](docs/TASKFLOW.md).
 
 ## Run locally
 
@@ -57,15 +45,9 @@ The script creates `.venv` and installs application dependencies on first run. O
 ./start.sh /path/to/recordings
 ```
 
-`start.sh` serves the app to your local network by default, so you can open it from another computer at the address printed on startup. There is no authentication and the app reads local paths the operator names, so only run it on a trusted network — never on a public interface. To keep it on this machine only:
+The server binds to loopback. It is intended for a local operator, not a public multi-user service. Recordings are read-only; caches, reviews and exports are stored in `workspace/`.
 
-```bash
-./start.sh --local
-```
-
-`ROBOCURATE_HOST` and `--host` set the bind address explicitly; `--port`/`ROBOCURATE_PORT` change the port. It is intended for a local operator, not a public multi-user service. Recordings are read-only; caches, reviews and exports are stored in `workspace/`.
-
-## Install the trained models
+## Historical stage models (optional; not needed for MiniMax review)
 
 Run from the extracted source directory (about 94 MB of model assets; no account required):
 
@@ -121,6 +103,4 @@ See [contributing](CONTRIBUTING.md), [changes](CHANGELOG.md), [validation scope]
 
 ## Contributors
 
-- [wangyian123](https://github.com/wangyian123)
-
-See the [contributors list](CONTRIBUTORS.md).
+See [CONTRIBUTORS.md](CONTRIBUTORS.md).

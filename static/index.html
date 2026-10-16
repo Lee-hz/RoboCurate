@@ -7,32 +7,32 @@
   <link rel="icon" href="app-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="workspace.css?v=20260916-full-model-v6">
   <link rel="stylesheet" href="progress.css?v=20260917-stage-evidence">
-  <link rel="stylesheet" href="simplify.css?v=20260917-ten-point">
+  <link rel="stylesheet" href="simplify.css?v=20260930-selection-first">
+  <link rel="stylesheet" href="sim-demo.css?v=20261009-demo">
+  <link rel="stylesheet" href="taskflow.css?v=20261016-minimax-access">
+  <link rel="stylesheet" href="review-type.css?v=20261016-minimax-access">
   <script type="importmap">{"imports":{"three":"/viewer/vendor/three.module.js"}}</script>
 </head>
 <body>
 <aside class="sidebar" id="app-sidebar" aria-label="主导航">
-  <div class="sidebar-head">
-    <a class="brand" href="#library"><span class="brand-icon"><svg viewBox="0 0 128 128" aria-hidden="true"><use href="app-icon.svg#mark"/></svg></span><span class="brand-name">RoboCurate</span></a>
-    <button id="sidebar-toggle" class="sidebar-toggle" data-action="toggle-sidebar" aria-label="收起侧栏" aria-expanded="true" aria-controls="app-sidebar" title="收起侧栏 · Ctrl+\"><svg class="sidebar-control-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="/sidebar-control.svg#panel"/></svg></button>
-  </div>
+  <a class="brand" href="#library"><span class="brand-icon"><svg viewBox="0 0 128 128" aria-hidden="true"><use href="app-icon.svg#mark"/></svg></span><span class="brand-name">RoboCurate</span></a>
   <div class="workspace-label">数据工作空间 <span>G1</span></div>
   <nav>
-    <a href="#library" data-nav="library" aria-label="数据工作台" title="数据工作台"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="workspace-icons.svg#table"/></svg></span><span class="nav-label">数据工作台</span> <span id="nav-count" class="nav-count">—</span></a>
+    <a href="#library" data-nav="library" aria-label="数据工作台" title="数据工作台"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="workspace-icons.svg#table"/></svg></span><span class="nav-label">数据工作台</span></a>
     <a href="#exports" data-nav="exports" aria-label="导出中心" title="导出中心"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="workspace-icons.svg#export"/></svg></span><span class="nav-label">导出中心</span></a>
-    <a href="#rules" data-nav="rules" aria-label="分级与质检规则" title="分级与质检规则"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="workspace-icons.svg#sliders"/></svg></span><span class="nav-label">分级与质检规则</span></a>
+    <a href="#sim-demo" data-nav="sim-demo" aria-label="仿真参考演示" title="仿真参考演示"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="workspace-icons.svg#sliders"/></svg></span><span class="nav-label">仿真参考演示</span></a>
     <a href="#guide" data-nav="guide" aria-label="使用指南" title="使用指南"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="workspace-icons.svg#help"/></svg></span><span class="nav-label">使用指南</span></a>
   </nav>
-  <div class="side-section"><span class="eyebrow">当前数据源</span><div class="source-node"><i></i><span id="source-name">正在扫描…</span><button class="source-refresh" id="source-refresh" data-action="rescan-sources" title="重新扫描数据目录" aria-label="重新扫描数据目录"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="/workspace-icons.svg#reset"/></svg></button></div><div class="source-sub">MCAP / G1</div><button class="text-btn" data-action="import">添加数据目录</button></div>
-  <div class="side-bottom"><span class="local-dot"></span> 本机存储<span class="muted"> · 原始数据只读</span><p>本地处理 · 审核留痕</p></div>
+  <div class="side-section"><span class="eyebrow">当前数据源</span><div class="source-node"><i></i><span id="source-name">正在扫描…</span><button class="source-refresh" id="source-refresh" data-action="rescan-sources" title="重新扫描数据目录" aria-label="重新扫描数据目录">↻</button></div><button class="text-btn" data-action="import">添加数据目录</button></div>
+  <div class="side-bottom"><span class="local-dot"></span> 本机存储<span class="muted"> · 原始数据只读</span></div>
 </aside>
 <button class="sidebar-scrim" data-action="toggle-sidebar" aria-label="收起导航"></button>
 <div class="app-shell">
-  <header class="topbar"><div class="topbar-navigation"><span class="breadcrumb-path"><span class="muted">G1 / 人形移动操作</span><span class="crumb">/</span><span id="breadcrumb">数据工作台</span></span></div><div class="top-status"><span id="service-status"><i class="local-dot"></i> 服务已连接</span><button class="theme-toggle" data-action="theme" id="theme-toggle" aria-label="切换明暗主题">浅色模式</button></div></header>
+  <header class="topbar"><div class="topbar-navigation"><button id="sidebar-toggle" class="sidebar-toggle" data-action="toggle-sidebar" aria-label="侧栏" aria-controls="app-sidebar" title="侧栏"><svg class="sidebar-control-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="/sidebar-control.svg#panel"/></svg><span class="sidebar-toggle-label">侧栏</span></button><span class="toolbar-divider" aria-hidden="true"></span><span class="breadcrumb-path"><span class="muted">G1 / 人形移动操作</span><span class="crumb">/</span><span id="breadcrumb">数据工作台</span></span></div><div class="top-status"><button id="minimax-access" class="theme-toggle" data-minimax-access aria-haspopup="dialog">MiniMax 接入</button><span id="service-status"><i class="local-dot"></i> 服务已连接</span><button class="theme-toggle" data-action="theme" id="theme-toggle" aria-label="切换明暗主题">浅色模式</button></div></header>
   <main id="main"><div class="loading-page"><span class="spinner"></span> 正在读取本地采集记录…</div></main>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 <dialog id="dialog"><div id="dialog-content"></div></dialog>
-<script type="module" src="studio.js?v=20260917-robocurate"></script>
+<script type="module" src="studio.js?v=20261016-minimax-access"></script>
 </body>
 </html>

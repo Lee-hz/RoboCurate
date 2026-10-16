@@ -1,4 +1,5 @@
 import {stageAt,stageEvidenceAt,stageColors,stageInputSummary,reviewTarget} from './stage-data.mjs';
+import {executionQualityHTML} from './execution-quality.mjs';
 
 const shortNames=['接近','抓取','搬运','放置','释放后'];
 const reasonHelp={'输入不完整':'当前采样缺少相机或关节输入，需结合原始画面核对。','模型意见分歧':'三个网络对阶段的判断不一致。','把握度较低':'当前预测把握度低于 80%。','阶段证据不足':'概率校准前的原始输出仍有不确定信号，较高把握度也需要复核。','无有效图像':'该采样没有足够的有效图像，模型没有给出阶段。','阶段切换附近':'阶段标签发生变化，需核对切换位置。','阶段过渡待核查':'辅助模型提示可能发生阶段过渡，精确时刻仍需核查。'};
@@ -21,6 +22,7 @@ export function stageResultHTML(panel){
 
     </section>
     <p class="stage-outcome-note"><strong>最终结果待核验</strong> · 请查看画面确认香蕉是否入篮。</p>
+    ${executionQualityHTML(panel)}
     <section class="stage-review-queue" aria-label="模型待复核片段"><div class="warp-heading"><h4>待复核片段 <span>${ranges.length}</span></h4></div>
       <div class="stage-review-tools"><select id="stage-reason-filter" aria-label="按模型复核原因筛选">${options.map(([bits,name])=>`<option value="${bits}" ${Number(panel.stageFilter)===bits?'selected':''}>${e(name)}</option>`).join('')}</select><button data-stage-review-nav="-1" aria-label="上一处模型待复核片段">← 上一处</button><button data-stage-review-nav="1" aria-label="下一处模型待复核片段">下一处 →</button></div>
       <div class="stage-review-list">${visible.map(x=>`<article class="stage-review-item" data-review-range="${x.id}"><button data-stage-review="${x.id}" class="stage-review-locate" title="定位片段起点"><b>${timeLabel(x.start_s)} – ${timeLabel(x.end_s)}</b><small>${e(x.reasons.join(' · ')||'模型提示复核')}</small></button><div class="stage-review-item-actions"><button data-stage-preview="${x.id}">回看</button><button data-stage-draft="${x.id}">填入审核范围</button></div></article>`).join('')||`<p class="stage-queue-empty">${ranges.length?'此原因下没有片段。':'当前模型没有触发复核提示，仍需核验最终结果。'}</p>`}</div>

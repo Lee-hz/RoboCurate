@@ -1,3 +1,23 @@
+# 2026-10-16 · MiniMax VLM review update
+
+- Unified reference-driven review: shared camera/3D playback, stage timeline, actual model inputs and joint feedback, and separate human review.
+- Consistent library typography and VLM review filters; recoverable analysis failures and elapsed-time feedback.
+- Added local MiniMax connection form with private per-install credentials, redacted settings API, disconnect and active-job guards; new reviews reject non-MiniMax models.
+- Source package now includes taskflow and curation modules. No private recordings, credentials, review database or inference traces are packaged.
+- Kept contributor attribution and directory rescan. The published application runs on loopback for individual local use; the earlier default LAN launcher is replaced.
+- Updated historical export tests with explicit synthetic admission fixtures; these fixtures never alter production reviews or claim measured model accuracy.
+
+## Unreleased — 2026-10-09 — stage execution quality
+
+- Add an in-workbench presentation demo for 24 recorded simulations: world-coordinate robot/object replay, synchronized cached camera frames, low-speed interval locations and explicit same-batch reference comparisons. Illustration geometry and provisional grades are labelled; no new MuJoCo optimal rollout is claimed.
+- Quantify 23 execution indicators with formulas, units, data requirements and explicitly provisional engineering limits. Add bounded 100 Hz time-weighted IMU summaries, separate native peaks, sustained excursions and debounced hand-closure candidates.
+- Keep unmeasured geometry/contact criteria unknown. Recompute all 18 recordings and publish local descriptive reports without treating duration distributions as qualified references or trial-range values as safe execution.
+- Add stage execution checks for safe approach, accurate grasp, stable transport, accurate placement, and safe withdrawal of both the arm and the whole robot.
+- Measure candidate duration and native motion evidence; allow reviewed interval corrections and recompute evidence before saving.
+- Compare duration with an explicit, documented target only after confirming execution requirements and interval completeness. Unknowns and failures cannot be offset by speed.
+- Save human decisions and evidence in separate revisioned audit tables. Stage predictions, existing grades and export admission are unchanged.
+- Validate all 18 local recordings, backend decision guards, and browser review/save/reload behavior in an isolated workspace. No automated safety or task-success certification is claimed.
+
 ## v0.1.0-preview.3 — complete training source and model distribution
 
 - Publish the remaining research/training, calibration, ablation, validation and historical delivery scripts with frozen protocols and a source index.

@@ -81,6 +81,8 @@ def test_segment_validation_and_export_guards(real_library):
 
 def test_real_export_roundtrip(real_library,tmp_path):
     lib,ref=real_library
+    # Synthetic admission fixture exercises export, not a claim about this recording.
+    lib.task_audit.curation=lambda:dict(episodes={ref.id:dict(grade='B',score=6.25,reason='测试准入夹具')})
     before=(ref.path.stat().st_size,ref.path.stat().st_mtime_ns)
     event=lib.diagnostics(ref.id)['events'][0]
     patch=lib.validate_review(ref.id,dict(revision=0,grade='B',instruction='自动化导出验收，不代表人工任务判定',event_decisions={event['id']:'accepted'},
@@ -93,10 +95,11 @@ def test_real_export_roundtrip(real_library,tmp_path):
     with zipfile.ZipFile(lib.export_root/result['file']) as z:
         manifest=json.loads(z.read('manifest.json'));ep=manifest['episodes'][0]
         assert ep['source_eligible'] is False
-        assert ep['quality']['grading']['version'] == 1
+        assert ep['quality']['grading']['version'] == 2
         assert ep['quality']['grading']['grade'] == 'B'
         assert ep['quality']['rating']['max_score'] == 10
-        assert ep['quality']['rating']['version'] == 3
+        assert ep['quality']['rating']['version'] == 4
+        assert ep['quality']['score'] == 6.25
         assert 0 <= ep['quality']['score'] <= 10
         assert ep['quality']['score'] == ep['quality']['rating']['score']
         assert z.read('README.txt').decode().startswith('RoboCurate')
@@ -140,6 +143,7 @@ def test_corrupt_record_is_reported(tmp_path):
 
 def test_preflight_finds_blockers_and_matches_shared_plan(real_library):
     lib,ref=real_library
+    lib.task_audit.curation=lambda:dict(episodes={ref.id:dict(grade='B',score=6.25,reason='测试准入夹具')})
     report=lib.preflight(dict(ids=[ref.id],kind='dataset',fps=30))
     assert not report['ready']
     assert any('任务指令' in b for b in report['records'][0]['blockers'])
@@ -244,4 +248,20 @@ def test_data_grade_d_blocks_training_even_with_manual_approval(real_library, tm
     assert any('自动数据等级 D' in b for b in result['records'][0]['blockers'])
     with pytest.raises(ValueError, match='自动数据等级 D'):
         build_bundle(lib, [record], options, tmp_path, {'id':'export_rejected'})
+    assert not list(tmp_path.glob('*.zip'))
+
+
+@pytest.mark.parametrize('grade',['E','R','U'])
+def test_unqualified_task_blocks_training_even_with_manual_approval(real_library,tmp_path,grade):
+    import copy
+    lib,ref=real_library
+    record=copy.deepcopy(lib.record(ref))
+    record['review'].update(grade='A',instruction='拿起物体放进篮子',source_fingerprint=lib.fingerprint(ref))
+    record['quality']['grading'].update(method='deminf_qualified_v2',grade=grade,summary='过程不完整或准入待核实')
+    options=dict(kind='dataset',fps=30)
+    result=preflight(lib,[record],options)
+    assert not result['ready']
+    assert any('未通过任务准入' in b for b in result['records'][0]['blockers'])
+    with pytest.raises(ValueError,match='未通过任务准入'):
+        build_bundle(lib,[record],options,tmp_path,{'id':'export_unqualified'})
     assert not list(tmp_path.glob('*.zip'))

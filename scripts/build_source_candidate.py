@@ -9,8 +9,8 @@ import shutil
 import zipfile
 
 APP=Path(__file__).resolve().parents[1]
-ROOT_FILES=['.gitignore','README.md','README.zh-CN.md','CONTRIBUTING.md','CONTRIBUTORS.md','SECURITY.md',
-    'CHANGELOG.md','LICENSE_STATUS.md','THIRD_PARTY_NOTICES.md','OPEN_SOURCE_READINESS.md',
+ROOT_FILES=['.gitignore','README.md','README.zh-CN.md','CONTRIBUTING.md','SECURITY.md',
+    'CHANGELOG.md','CONTRIBUTORS.md','LICENSE_STATUS.md','THIRD_PARTY_NOTICES.md','OPEN_SOURCE_READINESS.md',
     'INTERACTION_UPGRADE.md','RELEASE_STATUS.json','start.sh','pytest.ini']
 PATTERNS=['*.py','requirements*.txt','scripts/*.py','scripts/*.sh','tests/test_*.py',
     'tests/*.test.mjs','tests/warp_fixtures.py','tests/check_demo_ui.py','tests/check_progress_live.py',
@@ -18,7 +18,7 @@ PATTERNS=['*.py','requirements*.txt','scripts/*.py','scripts/*.sh','tests/test_*
     'static/*.css','static/licenses/*.txt',
     'static/viewer/*.js','static/viewer/*.mjs','static/viewer/*.html','static/viewer/*.css',
     'static/viewer/g1-preview.json','static/viewer/vendor/*.js',
-    'robot/*.urdf','robot/SOURCE.json','robot/meshes/*.STL','warp_progress/*.py',
+    'robot/*.urdf','robot/SOURCE.json','robot/meshes/*.STL','warp_progress/*.py','taskflow/*.py','curation/*.py',
     'vendor/*.py','vendor/warp_rm/*.py','vendor/warp_rm/LICENSE','vendor/warp_rm/provenance.json',
     'docs/*.md','docs/references/*.md','docs/references/*.json','docs/licensing/*.json','docs/licensing/*.txt',
     'docs/images/synthetic-demo.png','docs/images/task-workspace.png',
@@ -28,7 +28,7 @@ PATTERNS=['*.py','requirements*.txt','scripts/*.py','scripts/*.sh','tests/test_*
     'models/*.json','research/README.md','research/SOURCE_INDEX.json','research/*/*.py','research/*/*.md',
     'research/*/protocol*.json','research/*/freeze.json','research/*/task_contract.json',
     'research/*/promotion_protocol.json']
-FORBIDDEN_SUFFIXES={'.mcap','.npz','.pt','.pth','.safetensors','.sqlite','.sqlite3','.zip','.pyc'}
+FORBIDDEN_SUFFIXES={'.mcap','.npz','.pt','.pth','.safetensors','.sqlite','.sqlite3','.zip','.pyc','.key','.pem'}
 SECRET_PATTERNS=[rb'hf_[A-Za-z0-9]{25,}',rb'gh[pousr]_[A-Za-z0-9]{30,}',
     rb'github_pat_[A-Za-z0-9_]{30,}',rb'-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----']
 

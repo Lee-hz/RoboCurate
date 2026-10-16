@@ -1,0 +1,173 @@
+/* Shared workspace and review typography contract. Keep this after taskflow.css.
+   Page 24/600; active stage 18/600; section 14/600;
+   body 14/400; controls/labels 13/500; secondary 12/400.
+   Numerical evidence uses tabular figures; monospace is reserved for raw JSON. */
+:root {
+  --font-ui: "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --review-page-size: 24px;
+  --review-stage-size: 18px;
+  --review-section-size: 14px;
+  --review-body-size: 14px;
+  --review-control-size: 13px;
+  --review-note-size: 12px;
+  --review-line: 1.6;
+  --review-note-color: color-mix(in srgb, var(--ink) 66%, var(--panel-bg));
+}
+.tf-root .tf-page {font-family:var(--font-ui);font-size:var(--review-body-size);line-height:var(--review-line)}
+.tf-root .tf-heading h1 {font:600 var(--review-page-size)/1.3 var(--font-ui);letter-spacing:0}
+.tf-root .tf-detail-title h3,.tf-root .tf-dialog-header h2 {font:600 var(--review-stage-size)/1.4 var(--font-ui);letter-spacing:0}
+.tf-root .tf-page :is(h2,h3,h4),.tf-root .audit-viewbar>b,.tf-root .tf-segment-label b {
+  font-family:var(--font-ui);font-size:var(--review-section-size);font-weight:600;line-height:1.5;letter-spacing:0;
+}
+/* The active stage is a title, not another small section caption. */
+.tf-root .tf-page .tf-detail-title h3 {font-size:var(--review-stage-size);line-height:1.4}
+.tf-root .tf-page :is(button,select,input,textarea,summary,label),.tf-root .tf-page .tf-file {
+  font-family:var(--font-ui);font-size:var(--review-control-size);line-height:1.5;
+}
+.tf-root .tf-page :is(button,summary,label) {font-weight:500}
+.tf-root .tf-page :is(input,select,textarea) {font-weight:400}
+.tf-root .tf-page textarea,.tf-root .tf-criterion b,.tf-root .tf-criterion p,.tf-root .tf-reason,.tf-root .tf-goal {
+  font-size:var(--review-body-size);line-height:var(--review-line);letter-spacing:0;
+}
+.tf-root .tf-criterion b {font-weight:500}.tf-root .tf-criterion p,.tf-root .tf-reason {font-weight:400}
+.tf-root .tf-page .tf-detail-tabs button {font-size:var(--review-control-size);font-weight:500}
+.tf-root .tf-page .tf-detail-tabs button[aria-selected=true] {font-weight:600}
+.tf-root .tf-page :is(.tf-note,.tf-muted,.tf-run-context,.tf-detail-head,.tf-detail-meta,.tf-state,.tf-verdict-note,.tf-guard-note,.tf-playback-meta,.tf-timeline-heading,.tf-feedback-scale,.tf-feedback-controls>span,.tf-input-section-heading>span,.tf-feedback-events summary>span,.tf-footnote,.tf-source-tag,.tf-provider,.tf-task-context summary>span,.tf-panel-heading h3>span,.tf-segment-label small,.tf-fact-transition,.tf-state-facts small,.tf-evidence button>span,.audit-motion-note,.audit-coordinate-note) {
+  font-family:var(--font-ui);font-size:var(--review-note-size);font-weight:400;line-height:1.6;
+}
+.tf-root .tf-page :is(.tf-note,.tf-muted,.tf-detail-head,.tf-guard-note,.tf-playback-meta,.tf-feedback-scale,.tf-footnote,.tf-fact-transition,.tf-state-facts small,.audit-coordinate-note) {color:var(--review-note-color)}
+.tf-root .tf-page .tf-transport>span,.tf-root .tf-page .tf-input-select>span {font-size:var(--review-control-size)}
+.tf-root .tf-page .tf-segment-number {font-size:var(--review-control-size);font-weight:600;line-height:23px}
+.tf-root .tf-page .tf-state-facts>div>span:first-child {font-size:var(--review-control-size);font-weight:400;line-height:1.5}
+.tf-root #tf-input-content>.tf-state-compact>div>span:first-child {font-size:var(--review-control-size);font-weight:400;line-height:1.5;color:var(--review-note-color)}
+.tf-root #tf-input-content>.tf-state-compact b,.tf-root .tf-state-facts b,.tf-root .tf-feedback-reading {
+  font-family:var(--font-ui);font-size:var(--review-body-size);font-weight:600;line-height:1.5;letter-spacing:0;font-variant-numeric:tabular-nums lining-nums;
+}
+.tf-root .tf-state-facts b {display:flex;flex-wrap:wrap;gap:0 5px;align-items:baseline}
+.tf-root .tf-fact-value {white-space:nowrap}
+.tf-root .tf-state-facts b .tf-fact-unit {font-size:var(--review-note-size);font-weight:400;white-space:nowrap;color:var(--review-note-color)}
+.tf-root #tf-input-content>.tf-state-compact>.tf-note,.tf-root #tf-input-content>.tf-state-compact small {font-size:var(--review-note-size);line-height:1.6}
+.tf-root .tf-page :is(.tf-detail-meta,.tf-segment-label small,.tf-run-context,.tf-feedback-scale,.tf-input-section-heading>span,#tf-time) {font-variant-numeric:tabular-nums lining-nums}
+.tf-root .tf-feedback-chart text {font:400 12px var(--font-ui);font-variant-numeric:tabular-nums}
+.tf-root .tf-page pre {font:400 12px/1.65 var(--font-mono)}
+/* Do not make narrow layouts readable only by shrinking the text. */
+@container taskflow (max-width:480px){.tf-root .tf-heading h1{font-size:22px}.tf-feedback-controls{flex-wrap:wrap}.tf-input-select{flex-wrap:wrap}.tf-input-select select{flex-basis:180px}}
+.tf-root .tf-page .tf-dialog-header h2 {font-size:var(--review-stage-size);font-weight:600;line-height:1.4}
+
+/* Shared chrome: the same face, controls and secondary text on every route. */
+body {font-family:var(--font-ui);font-size:var(--review-body-size);line-height:var(--review-line)}
+button,input,select,textarea {font-family:var(--font-ui)}
+.page-head h1 {font:600 var(--review-page-size)/1.3 var(--font-ui);letter-spacing:0}
+.panel-head h2 {font:600 var(--review-section-size)/1.5 var(--font-ui)}
+.sidebar nav a,.topbar button,.side-section button {font-size:var(--review-control-size);font-weight:500}
+.sidebar :is(.nav-count,.eyebrow,.source-node,.side-bottom),.topbar :is(.breadcrumb-path,.top-status,.sidebar-toggle-label) {font:400 var(--review-note-size)/1.6 var(--font-ui);letter-spacing:0}
+.sidebar .side-section {padding-top:8px}.sidebar .side-section button {margin-top:8px}
+.sidebar .side-bottom {line-height:1.7}
+.sidebar .nav-count {font-variant-numeric:tabular-nums}
+/* Library: one count, one filter group, one stage result per recording. */
+.library-page {container:library / inline-size;line-height:var(--review-line)}
+.library-page .page-head {margin-bottom:24px;gap:16px;align-items:center}
+.library-page .page-head h1 {margin:0}
+.library-page .panel {border-radius:12px;overflow:hidden}
+.library-page :is(button,select,input,.record-open) {font-size:var(--review-control-size);line-height:1.5;min-height:36px;border-radius:7px}
+.library-page :is(button,.record-open) {font-weight:500}
+.library-page input[type=checkbox] {width:16px;height:16px;min-height:0;cursor:pointer}
+.library-page .panel-head {padding:18px 20px 12px;gap:16px;min-height:60px}
+.library-page .panel-head h2 {display:flex;align-items:baseline;gap:10px}
+.library-page #record-count {font-size:var(--review-control-size);font-weight:400;color:var(--review-note-color);font-variant-numeric:tabular-nums}
+.library-list-actions {display:flex;align-items:center;gap:12px}
+.library-page .library-filters {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 12px;padding:4px 20px 20px;border-bottom:1px solid var(--border)}
+.library-filters .search-box {grid-column:span 2;min-width:0}
+.library-filters .search-box>span {top:9px}
+.library-filters label {display:flex;flex-direction:column;gap:7px;min-width:0;font-size:var(--review-control-size);font-weight:500;color:var(--review-note-color)}
+.library-filters select {width:100%;font-weight:400;color:var(--ink)}
+.library-page th {font-size:var(--review-control-size);font-weight:500;padding:12px;color:var(--review-note-color);background:var(--control-bg)}
+.library-page td {font-size:var(--review-body-size);padding:16px 12px;vertical-align:middle}
+.library-page :is(td,th):first-child {width:44px;padding-left:20px;padding-right:8px}
+.library-page :is(td,th):last-child {padding-right:20px;text-align:right}
+.library-page .ep-cell {gap:12px;min-width:0}
+.library-page .thumb {width:72px;height:46px;border-radius:6px;flex:none}
+.library-page .ep-name {font-size:var(--review-body-size);font-weight:600;letter-spacing:0;font-variant-numeric:tabular-nums}
+.library-page :is(.ep-sub,.grade-meta,.record-unit,.progress-inline) {font-size:var(--review-note-size);font-weight:400;color:var(--review-note-color);line-height:1.6}
+.library-page .ep-sub {margin-top:4px;max-width:none}
+.library-page .audit-provenance {white-space:normal;overflow:visible;max-width:330px;font-variant-numeric:tabular-nums}
+.library-page :is(.record-task-outcome,.record-audit-status) {font-size:var(--review-body-size);font-weight:400;line-height:1.6}
+.library-page .record-audit-status[data-state=not_started] {color:var(--review-note-color)}
+.library-page .record-task-outcome[data-result=running] {color:var(--brand-color)}
+.library-page .record-duration {white-space:nowrap;font-variant-numeric:tabular-nums}
+.library-page .record-retention .badge {font-size:var(--review-control-size);font-weight:400}
+.library-page .record-open {padding:7px 12px;background:transparent}
+.library-page .record-open:hover {background:var(--green-bg)}
+.library-page .bulk-bar {padding:12px 20px;font-size:var(--review-control-size);gap:10px}
+.library-page .bulk-bar b {font-weight:500}
+.library-page .empty {font-size:var(--review-body-size);padding:48px 20px}
+.library-page .episode-row:focus-within {background:var(--control-bg)}
+@container library (max-width:900px) {
+  .library-page table,.library-page tbody {display:block}
+  .library-page thead {display:block;background:var(--control-bg)}
+  .library-page thead tr {display:flex;align-items:center;min-height:44px}
+  .library-page thead th {border:0;padding-top:8px;padding-bottom:8px}
+  .library-page thead th:nth-child(n+3) {display:none}
+  .library-page .episode-row {display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px 14px;padding:16px 20px;border-bottom:1px solid var(--border);align-items:center}
+  .library-page .episode-row:last-child {border-bottom:0}
+  .library-page .episode-row td {border:0;padding:0;width:auto;min-width:0;text-align:left}
+  .library-page .record-selection {grid-column:1;grid-row:1}
+  .library-page .record-identity {grid-column:2;grid-row:1}
+  .library-page .record-duration {grid-column:3;grid-row:1;text-align:right!important}
+  .library-page .record-analysis {grid-column:2;grid-row:2}
+  .library-page .record-retention {grid-column:2;grid-row:3}
+  .library-page .record-action {grid-column:3;grid-row:2 / 4;justify-self:end}
+  .library-page .record-retention::before {content:'人工保留';font-size:var(--review-note-size);color:var(--review-note-color);margin-right:12px}
+  .library-page .record-analysis .audit-provenance {max-width:none}
+  .library-page .library-action-label {display:none}
+}
+@container library (max-width:480px) {
+  .library-page .page-head {align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:20px}
+  .library-page .page-head h1 {font-size:22px}
+  .library-page .panel-head {padding:14px 14px 10px}
+  .library-page .library-filters {grid-template-columns:repeat(2,minmax(0,1fr));padding:4px 14px 16px;gap:12px 10px}
+  .library-page .library-filters label:last-child {grid-column:1 / -1}
+  .library-filters .search-box {grid-column:1 / -1}
+  .library-filters #filter-source {grid-column:1 / -1}
+  .library-page .episode-row {padding:16px 14px;gap:10px;grid-template-columns:18px minmax(0,1fr) auto}
+  .library-page .thumb {display:none}
+  .library-page .ep-name {overflow-wrap:anywhere}
+  .library-page .ep-sub {white-space:normal}
+  .library-page .record-retention::before {display:none}
+}
+
+.library-list-actions #filter-sort {background:transparent;border-color:transparent;min-width:90px;color:var(--review-note-color)}
+.library-list-actions #filter-sort:hover {border-color:var(--border)}
+.library-page .panel-head {flex-wrap:wrap}
+/* Job status stays visible after failure and while awaiting a model response. */
+.tf-root .tf-job {gap:16px;padding:14px 16px;border-radius:10px}
+.tf-root .tf-job b {display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;font-size:14px;font-weight:600}
+.tf-root .tf-job :is(span,small) {font:400 12px/1.6 var(--font-ui);color:var(--review-note-color)}
+.tf-root .tf-job small {font-variant-numeric:tabular-nums}
+.tf-root .tf-job button {font-size:13px;min-height:36px}
+.tf-root .tf-job[data-state=failed] {border-color:var(--orange)}
+.tf-root .tf-job[data-state=failed] b {color:var(--orange)}
+.tf-root .audit-no-analysis {gap:16px;flex-wrap:wrap;font-size:14px}
+.tf-root .audit-no-analysis button {flex:none}
+.library-page .record-audit-status[data-state=failed] {color:var(--orange)}
+:root { --minimax-dialog-width: 480px; }
+.minimax-dialog { width:min(var(--minimax-dialog-width), calc(100vw - 32px)); max-height:calc(100dvh - 40px); padding:0; border:1px solid var(--border); border-radius:16px; background:var(--panel-bg); color:var(--ink); }
+.minimax-dialog::backdrop { background:rgb(0 0 0 / .55); backdrop-filter:blur(3px); }
+.minimax-form { display:flex; flex-direction:column; gap:20px; padding:28px; font-family:inherit; }
+.minimax-form header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+.minimax-form h2 { font-size:18px; font-weight:600; line-height:1.4; margin:0 0 8px; }
+.minimax-form header p { font-size:13px; color:var(--muted, #a6afc4); margin:0; }
+.minimax-form [data-close] { font-size:22px; line-height:1; padding:4px 8px; background:transparent; border:0; }
+.minimax-form label { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
+.minimax-form input { box-sizing:border-box; width:100%; min-width:0; height:42px; font-size:14px; font-family:inherit; }
+.minimax-note { font-size:12px; line-height:1.65; color:var(--muted, #a6afc4); margin:0; }
+#minimax-key-note { margin-top:-12px; }
+.minimax-model { display:flex; justify-content:space-between; gap:12px; padding:14px 0; border-block:1px solid var(--border); font-size:13px; }
+.minimax-model strong { font-weight:500; }
+.minimax-error { font-size:13px; color:var(--red); line-height:1.5; margin:0; }
+.minimax-error:empty { display:none; }
+.minimax-form footer { display:flex; justify-content:space-between; gap:12px; }
+.minimax-form footer button { font-family:inherit; font-size:13px; font-weight:500; line-height:1.5; padding:9px 16px; }
+.minimax-form :focus-visible { outline:2px solid var(--accent, #b39af0); outline-offset:3px; }
+
+.source-refresh { padding:2px 6px; border:0; background:transparent; color:var(--muted); font-size:18px; margin-left:auto; }

@@ -53,7 +53,7 @@ def test_invalid_export_policies(policy):
     with pytest.raises(ValueError):validate_policy(policy)
 
 
-def test_weighted_export_reader_roundtrip_and_original_masks(real_library,tmp_path):
+def test_weighted_export_reader_roundtrip_and_original_masks(real_library,tmp_path,monkeypatch):
     lib,ref=real_library;s=lib.progress_service
     install_profile(s,sys.executable);install_score(s,ref.id)
     policy=dict(model_id=MODEL_ID,horizon=10,threshold=1.,mode='continuous')
@@ -62,6 +62,9 @@ def test_weighted_export_reader_roundtrip_and_original_masks(real_library,tmp_pa
     patch=lib.validate_review(ref.id,dict(revision=0,grade='B',instruction='自动化验收样例，不代表人工任务确认',
                                        segments=[dict(start=2,end=4,label='测试一'),dict(start=5,end=7,label='测试二')]))
     lib.store.save_many([(ref.id,patch)])
+    assert not preflight(lib,[lib.record(ref)],options)['ready']
+    # Test-only admission fixture isolates the historical weighted export path.
+    monkeypatch.setattr(lib.task_audit,'curation',lambda:dict(episodes={ref.id:dict(grade='B',score=5,reason='test fixture')}))
     record=lib.record(ref);report=preflight(lib,[record],options)
     assert report['ready'] and report['records'][0]['progress']['retained_anchors']>0
     job=dict(id='export_warp_fixture',state='running')

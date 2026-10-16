@@ -155,6 +155,8 @@ def preflight(library, records, options):
             grading = record.get('quality', {}).get('grading', {})
             if grading.get('grade') == 'D':
                 row['blockers'].append('自动数据等级 D：'+grading['summary'])
+            elif grading.get('method') == 'deminf_qualified_v2' and grading.get('grade') not in ('A','B','C'):
+                row['blockers'].append('未通过任务准入：'+grading.get('summary','待复核'))
             if review.get('source_fingerprint') and review['source_fingerprint'] != library.fingerprint(ref):
                 row['blockers'].append('源文件已改变，需要重新审核')
             elif review['grade'] in ('A','B') and not review.get('source_fingerprint'):
@@ -229,6 +231,8 @@ def build_bundle(library, records, options, root, job):
             grading = record.get('quality', {}).get('grading', {})
             if grading.get('grade') == 'D':
                 raise ValueError('自动数据等级 D：'+grading['summary'])
+            elif grading.get('method') == 'deminf_qualified_v2' and grading.get('grade') not in ('A','B','C'):
+                raise ValueError('未通过任务准入：'+grading.get('summary','待复核'))
             fingerprint=library.fingerprint(ref)
             if review.get('source_fingerprint')!=fingerprint:
                 raise ValueError('原始文件已变化，请重新审核')

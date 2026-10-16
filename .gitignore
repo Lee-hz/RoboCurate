@@ -18,6 +18,10 @@ __pycache__/
 *.pth
 *.safetensors
 .env
+*.key
+*.pem
+minimax-local.json
+company-vlm.json
 .env.*
 !.env.example
 .cache/

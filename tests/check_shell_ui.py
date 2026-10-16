@@ -44,13 +44,12 @@ def main():
             check('expanded sidebar is explicit and accessible',side()=='expanded' and el('#sidebar-toggle').get_attribute('aria-expanded')=='true')
             check('grade navigation uses plain text without decorative icons',not d.find_elements('css selector','.quality-card svg') and len(d.find_elements('css selector','.quality-card .grade-code'))==4)
             check('published system font stack with normal weight',js('return getComputedStyle(document.body).fontFamily.includes("system-ui") && getComputedStyle(document.body).fontWeight==="400" && Number(getComputedStyle(document.querySelector("h1")).fontWeight)<=500'))
-            check('sidebar toggle is an icon beside the app mark',not el('#sidebar-toggle').text.strip() and el('#sidebar-toggle').get_attribute('aria-label')=='收起侧栏' and el('#sidebar-toggle use').get_attribute('href')=='/sidebar-control.svg#panel' and js('return !!document.querySelector(".sidebar .sidebar-head > .brand + #sidebar-toggle") && !document.querySelector(".topbar #sidebar-toggle")'))
+            check('sidebar toggle has explicit wording and a panel icon',el('#sidebar-toggle').text=='收起侧栏' and el('#sidebar-toggle use').get_attribute('href')=='/sidebar-control.svg#panel')
             current_url=d.current_url
             d.save_screenshot(str(evidence/'sidebar-library-expanded.png'))
             click('#sidebar-toggle')
             check('sidebar collapses to a navigable rail',side()=='collapsed' and js('return Math.round(document.querySelector(".sidebar").getBoundingClientRect().width)===56 && [...document.querySelectorAll("[data-nav]")].every(a=>a.getAttribute("aria-label")&&a.offsetWidth>0)'))
-            check('sidebar control does not navigate back',d.current_url==current_url and el('#sidebar-toggle').get_attribute('aria-label')=='展开侧栏' and el('#sidebar-toggle use').get_attribute('href')=='/sidebar-control.svg#panel')
-            check('collapsed rail reveals the open control over the app mark',js('return getComputedStyle(document.querySelector(".sidebar-control-icon")).opacity==="0"') and js('const b=document.querySelector("#sidebar-toggle").getBoundingClientRect(),m=document.querySelector(".brand-icon").getBoundingClientRect();return b.width>=m.width && b.left<=m.left && b.right>=m.right'))
+            check('sidebar control does not navigate back',d.current_url==current_url and el('#sidebar-toggle').text=='展开侧栏' and el('#sidebar-toggle use').get_attribute('href')=='/sidebar-control.svg#panel')
             check('content gains the released width',js('return parseFloat(getComputedStyle(document.querySelector(".app-shell")).marginLeft)===56'))
             d.save_screenshot(str(evidence/'sidebar-library-collapsed.png'))
             for view,selector in [('rules','.grade-standard'),('exports','#export-list'),('guide','.guide')]:

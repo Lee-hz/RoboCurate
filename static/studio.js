@@ -1,3 +1,4 @@
+import {auditStatus,taskOutcome,matchesTaskOutcome,matchesRetention,recordNavigation} from './record-audit.mjs';
 import { latestPoint, recordedGhosts } from "./trajectory-data.mjs";
 import { EpisodeData } from "./viewer/data.js";
 import { ReviewTools } from "./review-tools.js";
@@ -12,6 +13,8 @@ import {
 import { icon, installIcons } from "./icons.js";
 import { compareDataGrades, ratingPoints, ratingText, ratingPercent } from "./grading-view.mjs";
 import { reviewLabels, reviewIcons, queues, workflowState, nextReviewStep } from "./workflow.mjs";
+import {selectCandidates} from './selection.mjs';
+import {installMiniMaxAccess} from './minimax-access.mjs';
 
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
@@ -25,7 +28,7 @@ const escape = (s) =>
   );
 const copy = (x) => JSON.parse(JSON.stringify(x));
 const grades = reviewLabels;
-const dataGrades = { A: "优质", B: "良好", C: "需修整", D: "当前不可用" };
+const dataGrades = { A: "优先候选", B: "常规候选", C: "低优先候选", D: "已筛出 · 未完成", E: "已筛出 · 不完整", R: "待准入复核", U: "待任务识别" };
 const camNames = {
   head: "头部相机",
   left_wrist: "左腕相机",
@@ -49,11 +52,15 @@ let catalog = { episodes: [], counts: {}, roots: [] },
   dirty = false;
 let editingClip = null;
 let progressPanel = null;
+let simDemo = null;
+let taskflowPanel = null;
+let auditOverview=null,routeEpoch=0;
+const recordViewStates=new Map();
 let reviewIntent = null;
 let workflowBusyFor = null;
 let data = null,
   loadingData = false,
-  detailTab = "progress",
+  detailTab = "diagnostics",
   reviewTools = null,
   signalKind = "position",
   joint = 15,
@@ -81,12 +88,16 @@ let playhead = 0,
   refreshing = false;
 const filters = {
   search: "",
+  stageaudit: "",
+  stageoutcome: "",
+  source: "original",
   grade: "",
   auto: "",
+  cohort: "",
   queue: "",
   review: "",
   outcome: "",
-  sort: "quality",
+  sort: "newest",
 };
 const fmt = (n, d = 1) => Number(n || 0).toFixed(d);
 const size = (n) =>
@@ -111,6 +122,7 @@ function setSidebarCollapsed(collapsed, persist = true) {
   const button = $('#sidebar-toggle');
   if (button) {
     const label = collapsed ? '展开侧栏' : '收起侧栏';
+    button.innerHTML = `<svg class="sidebar-control-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="/sidebar-control.svg#panel"/></svg><span class="sidebar-toggle-label">${label}</span>`;
     button.setAttribute('aria-expanded',String(!collapsed));
     button.setAttribute('aria-label',label);
     button.title = label + ' · Ctrl+\\';
@@ -157,9 +169,9 @@ const frame = (e, cam, t) =>
   `/api/frame?ep=${encodeURIComponent(e.id)}&cam=${encodeURIComponent(cam)}&t=${Number(t).toFixed(3)}`;
 const outcome = (e) =>
   e.outcome === true
-    ? '<span class="badge success" title="采集人员记录的结果，未经当前模型核验">采集标记 · 成功</span>'
+    ? '<span class="badge success" title="采集人员记录的任务结果">采集标记 · 成功</span>'
     : e.outcome === false
-      ? '<span class="badge failure" title="采集人员记录的结果，未经当前模型核验">采集标记 · 失败</span>'
+      ? '<span class="badge failure" title="采集人员记录的任务结果">采集标记 · 失败</span>'
       : '<span class="badge grade-none">未标记</span>';
 const badge = (g) =>
   `<span class="badge review-verdict verdict-${g || 'none'}">${icon(reviewIcons[g] || 'clock')}${grades[g] || '未审核'}</span>`;
@@ -180,9 +192,10 @@ const filtered = () =>
             .join(" ")
             .toLowerCase()
             .includes(filters.search.toLowerCase())) &&
-        (!filters.grade || e.review.grade === filters.grade) &&
-        (!filters.auto || (e.quality.grading?.grade || "pending") === filters.auto) &&
-        (!filters.queue || workflowState(e).queue === filters.queue) &&
+        (!filters.source || (filters.source==='snapshots'?e.snapshot:!e.snapshot)) &&
+        (!filters.stageaudit || auditStatus(auditOverview,e.id).key === filters.stageaudit) &&
+        matchesTaskOutcome(auditOverview,e.id,filters.stageoutcome) &&
+        matchesRetention(e,filters.grade) &&
         (!filters.review ||
           (filters.review === "yes" ? !!e.review.grade : !e.review.grade)) &&
         (!filters.outcome ||
@@ -191,9 +204,7 @@ const filtered = () =>
             : e.outcome === false)),
     )
     .sort((a, b) =>
-      ["score", "quality"].includes(filters.sort)
-        ? compareDataGrades(a, b, filters.sort === "quality")
-        : filters.sort === "duration"
+      filters.sort === "duration"
           ? b.duration_s - a.duration_s
           : Number(!!b.session) - Number(!!a.session) ||
             (b.episode_id || b.name).localeCompare(a.episode_id || a.name),
@@ -203,8 +214,7 @@ async function refresh() {
   if (refreshing) return;
   refreshing = true;
   try {
-    catalog = await api("/api/catalog");
-    $("#nav-count").textContent = catalog.episodes.length;
+    const [nextCatalog,nextAudits]=await Promise.all([api("/api/catalog"),api("/api/taskflow").catch(()=>null)]);catalog=nextCatalog;auditOverview=nextAudits;
     $("#source-name").textContent =
       catalog.roots.length === 1
         ? catalog.roots[0].split("/").pop()
@@ -227,7 +237,7 @@ async function refresh() {
         robot = null;
       }
       if (current.cache === "ready" && !data && !loadingData) loadSignals();
-      reviewTools?.ensureLoaded();
+      if(!current.snapshot)reviewTools?.ensureLoaded();
       putHTML('#auto-grade-review', gradeReviewHTML(current));
       putHTML('#rating-overview', ratingOverviewHTML(current));
       updateReviewStep();
@@ -245,6 +255,7 @@ async function refresh() {
 }
 
 function cacheStatus(e) {
+  if(e.snapshot)return '<span class="qc-status">本机证据快照</span>';
   return e.cache === "ready"
     ? '<span class="qc-status ready">已解析</span>'
     : e.cache === "building"
@@ -262,9 +273,10 @@ function coverageText(e) {
   return value == null ? '—' : `${fmt(value * 100, 2)}%`;
 }
 function gradeReviewHTML(e) {
-  return `<div class="grade-review-meta"><span>30 Hz 共同有效覆盖 ${coverageText(e)}</span></div>`;
+  return `<div class="grade-review-meta"><span>${escape(e.curation?.reason||"等待任务准入")}</span></div>`;
 }
 function gradeReportHTML(e) {
+  if(e.quality.grading?.method==='deminf_qualified_v2')return curationEvidenceHTML(e);
   const g=e.quality.grading;
   if (!g) return '<p>等待分级结果，请刷新或重新解析。</p>';
   const m=g.metrics;
@@ -274,7 +286,7 @@ function gradeReportHTML(e) {
   ${g.reasons.length?g.reasons.map(c=>`<article class="grade-attention"><div>${icon(c.grade==='D'?'close':'warning')}<strong>${escape(c.label)}</strong></div><p>${escape(c.detail)}</p><p class="grade-action">建议：${escape(c.action)}</p>${['motion','coverage','numeric','continuity','timestamps'].includes(c.key)&&e.cache==='ready'?`<button class="small" data-grade-evidence="${c.key}">${icon('search')}定位相关线索</button>`:`<button class="small" data-detail="streams">${icon('list')}查看数据通道</button>`}</article>`).join(''):`<p>${escape(g.summary)}</p>`}
   <div class="evidence-actions"><button class="small" data-action="open-clips">${icon('crop')}检查保留范围</button><button class="small" data-action="review-instruction">${icon('list')}完善任务标注</button></div>
   <details class="grade-policy grade-all-checks"><summary>全部检查维度 · ${g.checks.length} 项</summary>${g.checks.map(c=>`<article class="grade-check"><div><span class="grade-code">${c.grade}</span><strong>${escape(c.label)}</strong></div><p>${escape(c.detail)}</p></article>`).join('')}</details>
-  <p class="hint">等级依据数值与时序。图像内容和任务成效仍需回放确认，覆盖率不等于任务成功率。</p></section>`;
+  <p class="hint">技术等级依据数值与时序，任务结果结合画面复核。</p></section>`;
 }
 async function loadReferenceChecks() {
   const target = $("#reference-checks-body"), ep = current?.id;
@@ -288,7 +300,7 @@ async function loadReferenceChecks() {
     if (!target.isConnected || current?.id !== ep) return;
     const names = {'state.q':'身体状态','action.q':'身体动作','hand.left.state_q':'左手状态','hand.right.state_q':'右手状态','hand.left.cmd_q':'左手指令','hand.right.cmd_q':'右手指令','camera.head':'头部相机','camera.left_wrist':'左腕相机','camera.right_wrist':'右腕相机'};
     const number = (x, decimals=1) => x == null ? '—' : fmt(x, decimals);
-    const details = `<p>参考 HFlow 的原始采集检查：以通道中位间隔为基准，记录超过 10 ms 的间隔偏差及超过 3 个周期的间隔。这里的测量不自动改变数据等级。</p><div class="table-scroll"><table class="technical-table reference-timing"><thead><tr><th>通道</th><th>中位频率</th><th>间隔偏差比例</th><th>非递增时间戳</th><th>长间隔次数</th></tr></thead><tbody>${Object.entries(report.timing).map(([key,r])=>`<tr><td>${escape(names[key] || key)}</td><td>${r.median_dt_s > 0 ? number(1/r.median_dt_s) + ' Hz' : '—'}</td><td>${number(r.period_violation_pct,2)}${r.period_violation_pct == null ? '' : '%'}</td><td>${r.nonpositive_dt_count ?? '—'}</td><td>${r.gap_count ?? '—'}</td></tr>`).join('')}</tbody></table></div><p>数值重复是复核线索。保持姿态、保持抓握、量化传感器和不变的控制目标都可能产生重复值。</p><div class="table-scroll"><table class="technical-table reference-values"><thead><tr><th>通道</th><th>NaN / Inf</th><th>完全重复步占比</th><th>未变化维数</th></tr></thead><tbody>${Object.entries(report.values).map(([key,r])=>`<tr><td>${escape(names[key] || key)}</td><td>${r.nan_count} / ${r.inf_count}</td><td>${number(r.repeated_step_pct,2)}%</td><td>${r.unchanged_dimensions?.length ?? '—'} / ${r.dimensions}</td></tr>`).join('')}</tbody></table></div><p class="hint">trajlens 的 0.1 ms 时间容差针对固定帧率数据，仅用于导出网格检查；不直接套用到原始多传感器采集。运动平滑度不代表任务完成，当前仍需人工复核。参考：<a href="https://github.com/Hebbian-Robotics/hflow" target="_blank" rel="noreferrer">HFlow</a> · <a href="https://github.com/Kunal-Somani/trajlens" target="_blank" rel="noreferrer">trajlens</a></p>`;
+    const details = `<p>参考 HFlow 的原始采集检查：以通道中位间隔为基准，记录超过 10 ms 的间隔偏差及超过 3 个周期的间隔。这里的测量不自动改变数据等级。</p><div class="table-scroll"><table class="technical-table reference-timing"><thead><tr><th>通道</th><th>中位频率</th><th>间隔偏差比例</th><th>非递增时间戳</th><th>长间隔次数</th></tr></thead><tbody>${Object.entries(report.timing).map(([key,r])=>`<tr><td>${escape(names[key] || key)}</td><td>${r.median_dt_s > 0 ? number(1/r.median_dt_s) + ' Hz' : '—'}</td><td>${number(r.period_violation_pct,2)}${r.period_violation_pct == null ? '' : '%'}</td><td>${r.nonpositive_dt_count ?? '—'}</td><td>${r.gap_count ?? '—'}</td></tr>`).join('')}</tbody></table></div><p>数值重复是复核线索。保持姿态、保持抓握、量化传感器和不变的控制目标都可能产生重复值。</p><div class="table-scroll"><table class="technical-table reference-values"><thead><tr><th>通道</th><th>NaN / Inf</th><th>完全重复步占比</th><th>未变化维数</th></tr></thead><tbody>${Object.entries(report.values).map(([key,r])=>`<tr><td>${escape(names[key] || key)}</td><td>${r.nan_count} / ${r.inf_count}</td><td>${number(r.repeated_step_pct,2)}%</td><td>${r.unchanged_dimensions?.length ?? '—'} / ${r.dimensions}</td></tr>`).join('')}</tbody></table></div><p class="hint">trajlens 的 0.1 ms 时间容差针对固定帧率数据，仅用于导出网格检查；不直接套用到原始多传感器采集。运动指标随任务画面同步呈现。参考：<a href="https://github.com/Hebbian-Robotics/hflow" target="_blank" rel="noreferrer">HFlow</a> · <a href="https://github.com/Kunal-Somani/trajlens" target="_blank" rel="noreferrer">trajlens</a></p>`;
     const changed = Object.values(report.timing).filter(r=>(r.nonpositive_dt_count||0)>0 || (r.gap_count||0)>0).length;
     const invalid = Object.values(report.values).reduce((n,r)=>n+r.nan_count+r.inf_count,0);
     const repeating = Object.values(report.values).filter(r=>(r.repeated_step_pct||0)>0).length;
@@ -306,26 +318,22 @@ function putHTML(selector, html) {
     renderedHTML.set(host, html);
   }
 }
-function statsHTML() {
-  const seconds = catalog.episodes.reduce((sum,e)=>sum+e.duration_s,0);
-  const bytes = catalog.episodes.reduce((sum,e)=>sum+e.size_bytes,0);
-  return `<span>${icon('table')}${catalog.episodes.length} 条采集记录</span><span>${icon('clock')}${fmt(seconds/60)} 分钟</span><span>${size(bytes)}</span><span>采集端标记：${catalog.counts.success || 0} 成功 · ${catalog.episodes.filter(e=>e.outcome===false).length} 失败</span>`;
-}
 function qualityOverviewHTML() {
-  return `<div class="quality-overview-head"><h2>数据质量</h2><a class="subtle-link" href="#rules">分级标准</a></div><div class="quality-card-grid">${Object.entries({...dataGrades,pending:'待评估'}).map(([g,label])=>{
+  const ready=selectCandidates(catalog.episodes).length,excluded=catalog.episodes.filter(e=>['D','E'].includes(e.quality.grading?.grade)).length;
+  return `<div class="quality-overview-head"><h2>筛选与分级</h2><span class="muted" id="curation-version">候选筛选</span><a class="subtle-link" href="#rules">分级标准</a></div><p class="curation-status">${ready} 条已排序候选 · ${excluded} 条已筛出 · ${catalog.episodes.length-ready-excluded} 条待判断。不同任务分别比较，待判断记录进入复核队列。</p><div class="quality-card-grid">${Object.entries(dataGrades).map(([g,label])=>{
     const count=catalog.episodes.filter(e=>(e.quality.grading?.grade || 'pending')===g).length;
     return `<button class="quality-card ${filters.auto===g?'selected':''}" data-quality-filter="${g}" aria-pressed="${filters.auto===g}" aria-label="筛选${g==='pending'?label:g+'级'+label}，${count}条"><span class="quality-card-label">${g==='pending'?'':`<span class="grade-code">${g}</span>`}<span>${label}</span></span><span class="quality-count">${count}</span></button>`;
-  }).join('')}</div>`;
+  }).join('')}</div><div class="curation-actions"><button data-action="select-qualified">选择当前范围全部合格候选</button><button data-action="select-priority">仅选择当前范围优先候选</button><span class="muted">选中后导出清单；不会删除原始数据。排名分在详情中查看。</span></div>`;
 }
 function queueHTML() {
   return `<span class="queue-heading">工作队列</span><button data-queue-filter="" class="queue-tab ${!filters.queue?'active':''}" aria-pressed="${!filters.queue}">全部 <b>${catalog.episodes.length}</b></button>${Object.entries(queues).map(([id,q])=>`<button data-queue-filter="${id}" class="queue-tab ${filters.queue===id?'active':''}" aria-pressed="${filters.queue===id}">${icon(q.icon)}${q.label}<b>${catalog.episodes.filter(e=>workflowState(e).queue===id).length}</b></button>`).join('')}`;
 }
 function syncFilters() {
-  for (const key of ['grade','auto','review','outcome','sort']) if ($('#filter-'+key)) $('#filter-'+key).value=filters[key];
+  for (const key of ['grade','auto','cohort','review','outcome','sort','stageaudit','stageoutcome','source']) if ($('#filter-'+key)) $('#filter-'+key).value=filters[key];
   if ($('#search')) $('#search').value=filters.search;
 }
 function resetBrowseFilters() {
-  Object.assign(filters,{search:'',grade:'',auto:'',review:'',outcome:'',queue:''});
+  Object.assign(filters,{search:'',stageaudit:'',stageoutcome:'',grade:'',auto:'',cohort:'',review:'',outcome:'',queue:''});
 }
 function chooseOverviewFilter(key,value) {
   const same=filters[key]===value;
@@ -383,9 +391,9 @@ async function openWorkflow(record, action = workflowState(record).action) {
     await refresh();toast('该记录已加入质检队列。');return;
   }
   if (action === 'preflight') return exportDialog([record.id], 'dataset');
-  if (page === 'review' && current?.id === record.id) return applyReviewAction(action);
+  if (page === 'record' && taskflowPanel?.recording?.id === record.id) {taskflowPanel.setDetailTab(['instruction','decision','review'].includes(action)?'manual':'criteria');return;}
   reviewIntent = {id:record.id,action};
-  location.hash = 'review/' + record.id;
+  location.hash = 'record/' + record.id;
 }
 async function locateGradeEvidence(key) {
   const tools = reviewTools, id = current?.id;
@@ -403,49 +411,58 @@ async function locateGradeEvidence(key) {
   tools.select(event.id);
   $('.details-panel')?.scrollIntoView({block:'nearest'});
 }
+function stageAuditCell(record){
+  const state=auditStatus(auditOverview,record.id),result=taskOutcome(auditOverview,record.id);
+  if(state.key==='not_started')return '<span class="record-audit-status" data-state="not_started">未分析</span>';
+  if(['unavailable','failed'].includes(state.key))return `<span class="record-audit-status" data-state="${state.key}">${escape(state.label)}</span>`;
+  const run=state.run;
+  const headline=state.key==='running'?state.label:result.label+(result.key==='failed'&&run?.summary.uncertain>0?` · ${run.summary.uncertain} 段证据不足`:'');
+  const scope=run?.analysis_range;
+  const range=scope?`${scope.start_s.toFixed(1)}–${scope.end_s.toFixed(1)}s`:'范围见结果';
+  const detail=state.key==='legacy'?range:state.key==='running'?state.detail:state.detail.replace('人工 ','已复核 ');
+  const provenance=run?`${run.model==='HORIZON-MiniMax'?'MiniMax':run.model||'历史模型未标注'} · ${detail}`:detail;
+  return `<span class="record-task-outcome" data-result="${state.key==='running'?'running':result.key}">${escape(headline)}</span><div class="ep-sub audit-provenance">${escape(provenance)}</div>`;
+}
+async function openTemplateManager(){
+  if(taskflowPanel)return;
+  const epoch=routeEpoch,{Taskflow}=await import('./taskflow.mjs');if(epoch!==routeEpoch||taskflowPanel)return;
+  const host=document.createElement('div');host.id='template-manager';$('#main').append(host);
+  const panel=new Taskflow(host,api,escape);taskflowPanel=panel;
+  try{await panel.mount(null,{configurationOnly:true});}catch(error){panel.destroy();host.remove();if(taskflowPanel===panel)taskflowPanel=null;throw error;}if(!panel.alive)return;
+  host.querySelector('#tf-setup-dialog').addEventListener('close',()=>{panel.destroy();host.remove();if(taskflowPanel===panel)taskflowPanel=null;},{once:true});
+}
 function renderLibrary() {
   page = "library";
-  $("#main").innerHTML = `<div class="page-head"><div><h1>数据筛选工作台</h1><div id="stats" class="library-metadata">${statsHTML()}</div></div><div class="actions"><button data-action="import">导入数据</button><button class="primary" data-action="analyze">批量质检</button></div></div>
-  <section id="data-grade-summary" class="panel quality-overview" aria-label="自动数据等级分布"></section>
-  <section class="panel library-records"><div id="workflow-queues" class="workflow-queues"></div><div class="panel-head"><h2>采集记录 <small id="record-count"></small></h2><div id="analysis-progress"></div></div>
-  <div class="filterbar"><div class="search-box"><span>${icon('search')}</span><input id="search" placeholder="搜索记录、任务或问题标签" aria-label="搜索记录" value="${escape(filters.search)}"></div>
-  <select id="filter-auto" aria-label="自动数据等级"><option value="">全部数据等级</option>${Object.entries(dataGrades).map(([g,label])=>`<option value="${g}" ${filters.auto===g?'selected':''}>${g} · ${label}</option>`).join('')}<option value="pending" ${filters.auto==='pending'?'selected':''}>待评估</option></select>
-  <select id="filter-grade" aria-label="审核结论筛选"><option value="">全部审核结论</option>${Object.entries(grades).map(([g,label])=>`<option value="${g}" ${filters.grade===g?'selected':''}>${label}</option>`).join('')}</select>
-  <select id="filter-review" aria-label="审核状态"><option value="">全部审核状态</option><option value="no" ${filters.review==='no'?'selected':''}>尚未审核</option><option value="yes" ${filters.review==='yes'?'selected':''}>已有结论</option></select>
-  <select id="filter-outcome" aria-label="采集结果"><option value="">全部采集结果</option><option value="yes" ${filters.outcome==='yes'?'selected':''}>采集成功</option><option value="no" ${filters.outcome==='no'?'selected':''}>采集失败</option></select>
-  <select id="filter-sort" aria-label="排序"><option value="quality" ${filters.sort==='quality'?'selected':''}>数据质量从高到低</option><option value="score" ${filters.sort==='score'?'selected':''}>数据质量从低到高</option><option value="newest" ${filters.sort==='newest'?'selected':''}>记录编号 ↓</option><option value="duration" ${filters.sort==='duration'?'selected':''}>时长最长优先</option></select></div>
-  <div class="browse-context"><span id="browse-context"></span><button class="text-btn" data-action="clear-filters" id="clear-filters">${icon('close')}清除筛选</button></div><div id="bulk-bar"></div>
-  <div class="table-scroll"><table><thead><tr><th><input type="checkbox" id="select-all" aria-label="选择筛选后的全部记录"></th><th>记录 / 任务</th><th>采集结果</th><th>时长 / 数据流</th><th>数据质量</th><th>审核结论</th><th>下一步</th></tr></thead><tbody id="episode-rows"></tbody></table></div><div class="count-foot"><span id="table-foot"></span><span>“可预检”表示基础条件满足，导出前仍需检查。</span></div></section>`;
+  $("#main").innerHTML = `<div class="library-page"><div class="page-head"><h1>数据工作台</h1><div class="actions"><button data-open-templates>任务范本</button><button class="primary" data-action="import">导入数据</button></div></div>
+  <section class="panel library-records" aria-label="采集记录"><div class="panel-head"><h2>采集记录 <span id="record-count" aria-live="polite"></span></h2><div class="library-list-actions"><span id="analysis-progress"></span><select id="filter-sort" aria-label="排序"><option value="newest" ${filters.sort==='newest'?'selected':''}>编号 ↓</option><option value="duration" ${filters.sort==='duration'?'selected':''}>时长 ↓</option></select><button class="text-btn" data-action="clear-filters" id="clear-filters">重置筛选</button></div></div>
+  <div class="library-filters">
+    <div class="search-box"><span>${icon('search')}</span><input id="search" placeholder="搜索记录、任务或标签" aria-label="搜索记录" value="${escape(filters.search)}"></div>
+    <select id="filter-source" aria-label="记录来源">${[['original','原始采集'],['snapshots','历史参考快照'],['','全部来源']].map(([v,label])=>`<option value="${v}" ${filters.source===v?'selected':''}>${label}</option>`).join('')}</select>
+    <label>审核进度<select id="filter-stageaudit" aria-label="阶段审核进度">${[['','全部进度'],['not_started','待分析'],['running','分析中'],['failed','分析失败'],['pending','待人工复核'],['reviewed','已复核'],['legacy','仅历史模型结果']].map(([v,label])=>`<option value="${v}" ${filters.stageaudit===v?'selected':''}>${label}</option>`).join('')}</select></label>
+    <label>阶段判断<select id="filter-stageoutcome" aria-label="任务判断筛选">${[['','全部判断'],['failed','含未完成尝试'],['uncertain','证据不足'],['completed','已分析阶段均完成']].map(([v,label])=>`<option value="${v}" ${filters.stageoutcome===v?'selected':''}>${label}</option>`).join('')}</select></label>
+    <label>人工保留<select id="filter-grade" aria-label="保留结论筛选"><option value="">全部结论</option><option value="unreviewed" ${filters.grade==='unreviewed'?'selected':''}>尚未决定</option>${Object.entries(grades).map(([g,label])=>`<option value="${g}" ${filters.grade===g?'selected':''}>${label}</option>`).join('')}<option value="stale" ${filters.grade==='stale'?'selected':''}>源文件变化，需复核</option></select></label>
+
+  </div><div id="bulk-bar"></div>
+  <div class="table-scroll"><table aria-label="采集记录列表"><thead><tr><th><input type="checkbox" id="select-all" aria-label="选择筛选后的全部记录"></th><th>记录</th><th>时长</th><th>阶段审核</th><th>人工保留</th><th><span class="library-action-label">操作</span></th></tr></thead><tbody id="episode-rows"></tbody></table></div></section></div>`;
   updateLibrary();
 }
 function updateLibrary() {
   const rows = filtered();
-  putHTML('#stats',statsHTML());
-  putHTML('#data-grade-summary',qualityOverviewHTML());
-  putHTML('#workflow-queues',queueHTML());
-  const filtersOn=!!(filters.search||filters.auto||filters.grade||filters.review||filters.outcome||filters.queue);
+  const filtersOn=!!(filters.search||filters.stageaudit||filters.stageoutcome||filters.grade);
   $('#clear-filters').hidden=!filtersOn;
-  $('#browse-context').textContent = `${filters.queue ? queues[filters.queue].label+' · ' : ''}${rows.length} 条匹配记录${filtersOn ? ' · 已应用筛选' : ''}`;
-  $("#record-count").textContent = `${catalog.episodes.length} 条记录`;
-  const building = catalog.episodes.filter(
-    (e) => e.cache === "building",
-  ).length;
+  $("#record-count").textContent = `${rows.length} 条`;
+  const building = catalog.episodes.filter(e=>e.cache === "building").length;
   $("#analysis-progress").innerHTML = building
-    ? `<span class="progress-inline"><span class="spinner"></span> 解析 ${catalog.counts.ready}/${catalog.counts.total} · ${building} 条处理中</span>`
-    : `<span class="qc-status ready">${catalog.counts.ready || 0} 条已解析</span>`;
-  putHTML('#episode-rows',rows.length ? rows.map(e=>`<tr class="episode-row" data-ep="${e.id}"><td><input type="checkbox" class="select-ep" data-id="${e.id}" ${selected.has(e.id)?'checked':''} aria-label="选择 ${escape(e.episode_id||e.name)}"></td>
-  <td><div class="ep-cell"><img class="thumb" loading="lazy" alt="${escape(e.episode_id||e.name)} 场景预览" src="${frame(e,Object.keys(e.cameras)[0]||'head',e.duration_s*.4)}"><div><div class="ep-name">${escape(e.episode_id||e.name)}</div><div class="ep-sub">${escape(e.task||'未命名任务')} · ${size(e.size_bytes)}</div></div></div></td><td>${outcome(e)}</td>
-  <td>${fmt(e.duration_s)} s<div class="ep-sub">${Object.keys(e.cameras).length} 路相机</div></td><td class="auto-grade-cell" data-auto-grade="${e.quality.grading?.grade||'pending'}">${dataGradeBadge(e)}${e.quality.rating?.score!=null?`<span class="row-score">${ratingText(e.quality.rating)}<small> / 10</small></span>`:""}<div class="grade-excerpt" title="${escape(e.quality.grading?.summary||'')}">${escape(e.quality.grading?.summary||'等待深度质检')}</div><div class="grade-coverage">有效覆盖 ${coverageText(e)}</div></td>
-  <td>${badge(e.review.grade)}<span class="grade-meta">${e.review_stale?'源文件变化，待重新审核':e.review.grade?'已保存':'待确认'}</span></td><td>${workflowButton(e)}<div class="workflow-row-state">${cacheStatus(e)}</div></td></tr>`).join('') : '<tr><td colspan="7"><div class="empty"><strong>没有符合条件的记录</strong>调整筛选条件，或添加本机数据目录。</div></td></tr>');
-  $("#table-foot").textContent =
-    `${rows.length} / ${catalog.episodes.length} 条 · ${selected.size} 条已选`;
-  $("#select-all").checked =
-    rows.length > 0 && rows.every((e) => selected.has(e.id));
-  $("#select-all").indeterminate =
-    rows.some((e) => selected.has(e.id)) && !$("#select-all").checked;
+    ? `<span class="progress-inline"><span class="spinner"></span>${building} 条解析中</span>` : '';
+  putHTML('#episode-rows',rows.length ? rows.map(e=>`<tr class="episode-row" data-ep="${e.id}"><td class="record-selection"><input type="checkbox" class="select-ep" data-id="${e.id}" ${selected.has(e.id)?'checked':''} aria-label="选择 ${escape(e.episode_id||e.name)}"></td>
+  <td class="record-identity"><div class="ep-cell"><img class="thumb" loading="lazy" alt="${escape(e.episode_id||e.name)} 场景预览" src="${frame(e,Object.keys(e.cameras)[0]||'head',e.duration_s*.4)}"><div><div class="ep-name">${escape(e.episode_id||e.name)}</div><div class="ep-sub">${escape(e.task||'未命名任务')}${e.snapshot?' · 历史快照':''}</div></div></div></td>
+  <td class="record-duration"><span>${fmt(e.duration_s)} <span class="record-unit">s</span></span><div class="ep-sub">${Object.keys(e.cameras).length} 路相机</div></td><td class="record-analysis">${stageAuditCell(e)}</td>
+  <td class="record-retention">${e.review.grade?badge(e.review.grade):`<span class="badge review-verdict verdict-none">${icon('clock')}未决定</span>`}${e.review_stale?'<span class="grade-meta">源文件已变化，需复核</span>':''}</td><td class="record-action"><a class="record-open" href="#record/${encodeURIComponent(e.id)}" aria-label="审核 ${escape(e.episode_id||e.name)}">审核 ${icon('right')}</a></td></tr>`).join('') : '<tr><td colspan="6"><div class="empty"><strong>没有符合条件的记录</strong>调整筛选条件，或导入数据。</div></td></tr>');
+  $("#select-all").checked = rows.length > 0 && rows.every(e=>selected.has(e.id));
+  $("#select-all").indeterminate = rows.some(e=>selected.has(e.id)) && !$("#select-all").checked;
+  const visibleSelected=rows.filter(e=>selected.has(e.id)).length;
   $("#bulk-bar").innerHTML = selected.size
-    ? `<div class="bulk-bar"><b>已选 ${selected.size} 条（当前可见 ${rows.filter(e=>selected.has(e.id)).length} 条）</b><button class="small" data-action="batch-grade">批量审核</button><button class="small" data-action="analyze-selected">质检所选</button><span class="spacer"></span><button class="small ghost" data-action="clear-selection">取消选择</button><button class="small primary" data-action="export-selected">导出所选 ↗</button></div>`
-    : "";
+    ? `<div class="bulk-bar"><b>已选 ${selected.size} 条${visibleSelected<selected.size?` · ${selected.size-visibleSelected} 条不在当前筛选中`:''}</b><button class="small" data-action="batch-grade">批量保留结论</button><span class="spacer"></span><button class="small ghost" data-action="clear-selection">取消选择</button><button class="small primary" data-action="export-selected">导出所选 ↗</button></div>` : "";
 }
 
 function saveDraft() {
@@ -474,17 +491,13 @@ function trajectoryHTML() {
     <div class="scene-readout"><span><b id="point-left-label">左腕</b><span id="wrist-left">—</span></span><span><b id="point-right-label">右腕</b><span id="wrist-right">—</span></span><span class="imu-readout">IMU 横滚 / 俯仰 <span id="base-tilt">—</span></span></div><div class="scene-foot"><span>骨盆相对坐标 · m <span class="coordinate-help" title="腕部与踝部关节原点；没有基座平移，不代表世界行走路线。未标定夹爪 TCP、足底接触点。">ⓘ</span></span><span id="trajectory-status">读取原始轨迹…</span></div></section>`;
 }
 function ratingOverviewHTML(e) {
-  const r=e.quality.rating;
-  return `<div class="rating-title"><span>技术评分</span>${dataGradeBadge(e)}</div><div class="rating-number"><strong>${ratingText(r)}</strong><span>/ 10</span><button class="text-btn" data-action="show-quality">评分依据 ${icon('right')}</button></div><div class="rating-bar"><i style="width:${ratingPercent(r)}%"></i></div><div class="rating-context">${r?.state==='blocked'?'关键条件未满足，暂不合成分数':r?.score!=null?'技术质量 · 任务结果需单独核验':'等待完整评估'}</div>`;
+  const r=e.quality.rating,c=e.curation;
+  return `<div class="rating-title"><span>数据质量评分</span>${dataGradeBadge(e)}</div><div class="rating-number"><strong>${ratingText(r)}</strong><span>/ 10</span><button class="text-btn" data-action="show-quality">评分依据 ${icon('right')}</button></div><div class="rating-bar"><i style="width:${ratingPercent(r)}%"></i></div><div class="rating-context">${c?.rank?`${c.cohort==='sim'?'仿真':'实操'}完整任务候选内 ${c.rank} / ${c.cohort_size} · DemInf 质量排序`:'未通过准入，不计分'} · 完整度不加权</div>`;
 }
-function ratingDetailsHTML(e) {
-  const r=e.quality.rating;
-  if(!r)return '';
-  const motion=r.dimensions.find(d=>d.key==='tracking');
-  return `<section class="rating-details"><div class="rating-detail-head"><h3>评分构成</h3><span>技术评分 · 10 分制</span></div><p class="hint">${escape(r.scope)}。等级限制和导出预检独立生效。</p>${r.reason?`<p>${escape(r.reason)}</p>`:''}${r.dimensions.map(d=>`<details class="rating-dimension"><summary><span>${escape(d.label)} <small>权重 ${d.weight*100}%</small></span><strong>${ratingText(r,d.score)} <small>/ 10</small></strong></summary><p>${escape(d.detail)}</p><p>本项贡献 ${(ratingPoints(r,d.score)*d.weight).toFixed(3)} 分，较满分减少 ${((10-ratingPoints(r,d.score))*d.weight).toFixed(3)} 分。</p><button class="text-btn" data-grade-evidence="${({tracking:'motion',timing:'continuity'})[d.key]||d.key}">定位相关线索</button></details>`).join('')}
-    ${motion?`<div class="body-coordination"><h3>移动操作 · 分部位跟踪</h3><p class="hint">本部位全部关节未超过提醒线的时间占比。</p>${motion.evidence.groups.map(g=>`<div><span>${escape(g.label)}</span><i><em style="width:${g.fraction*100}%"></em></i><b>${(g.fraction*100).toFixed(1)}%</b></div>`).join('')}</div>`:''}
-    <details class="motion-facts"><summary>腕部与足部运动参考</summary><p>骨盆坐标系；行程越短、活动比例越高都不代表任务完成得越好。数值受采样噪声影响。</p>${trajectoryData?trajectoryData.tracks.filter(t=>t.source==='state.q').map(t=>`<div>${t.side==='left'?'左':'右'}${t.part==='foot'?'踝':'腕'} · 行程 ${t.motion.travel_m.toFixed(2)} m · 活动时间 ${t.motion.active_fraction==null?'—':(t.motion.active_fraction*100).toFixed(1)+'%'}<small>速度 ≥ 0.01 m/s；有效观测 ${t.motion.observed_s.toFixed(2)} s</small></div>`).join(''):'轨迹尚未读取。'}</details><p class="hint">总分 = 各分项 × 权重之和。权重为本工作流初始工程设置，尚未验证与训练收益的关系；没有同任务成功基线时不生成“任务效率分”。</p></section>`;
+function curationEvidenceHTML(e){const c=e.curation||{},b=catalog.curation?.benchmark;
+ return `<section class="grade-report"><h3>先准入，再评质量</h3><p>${escape(c.reason||'尚无任务准入结论')}</p><p>过程完整且任务完成的记录进入候选池，其余记录分类保存。</p>${c.rank?`<p>本任务候选内第 ${c.rank} / ${c.cohort_size}。质量分按 DemInf 三个随机种子的组内名次计算。</p><p>三次训练范围 ${(c.seed_score_range||[]).join('–')}${c.unstable?'，排序波动较大，应复核':''}。</p>`:''}<details><summary>公开高手演示对照</summary><p>RoboMimic Can 100 段高手演示的无量纲动作指标参考分布。</p>${Object.entries(c.external_comparison||{}).map(([k,v])=>`<p>${escape(({pause_fraction:'低活动时间占比',reversal_fraction:'动作反向占比',joint_path_efficiency:'关节路径直达比',speed_burst:'速度峰值比'})[k]||k)}：本段 ${v.value.toFixed(3)}；公开 P10–P90 ${v.reference.p10.toFixed(3)}–${v.reference.p90.toFixed(3)}</p>`).join('')}</details>${b?`<details><summary>公开实验与适用范围</summary><p>150 段留出成功演示中，DemInf 前四分之一高手占比 52.6%，基线 33.3%。</p><p>离线动作预测对照采用全量记录与等量子集，比较各策略的动作误差。</p></details>`:''}</section>`;
 }
+function ratingDetailsHTML(e) {return curationEvidenceHTML(e);}
 
 function renderReview(id) {
   progressPanel?.destroy();
@@ -514,7 +527,7 @@ function renderReview(id) {
     : Object.keys(current.cameras)[0];
   playhead = 0;
   trajectoryData = null;trajectoryLoading = false;activeEvidenceId=null;
-  detailTab = "progress";
+  detailTab = "diagnostics";
   signalKind = "position";
   playRange = null;
   editingClip = null;
@@ -532,7 +545,7 @@ function renderReview(id) {
   const e = current,
     headMode = e.head_camera_mode === "stereo_sbs" ? "crop-left" : "";
   $("#main").innerHTML =
-    `<a class="back-link" href="#library">← 返回数据工作台</a><div class="page-head review-head"><div><h1>${escape(e.episode_id || e.name)} <span style="vertical-align:middle;margin-left:8px">${outcome(e)}</span></h1><p>${escape(e.task || "未命名任务")} · ${fmt(e.duration_s, 2)} 秒 · ${Object.keys(e.cameras).length} 路相机 · ${e.message_count.toLocaleString()} 条消息</p></div><div class="actions"><button class="small" data-action="previous">← 上一条</button><button class="small" data-action="next">下一条 →</button></div></div><div class="review-layout"><section class="review-main"><div class="panel playback-panel"><div class="player-header"><span>移动操作回放</span><div class="visual-layout-switch" role="group" aria-label="可视化布局"><button data-stage-layout="balanced" aria-pressed="true">联看</button><button data-stage-layout="motion" aria-pressed="false">3D 轨迹</button><button data-stage-layout="video" aria-pressed="false">相机</button></div>${e.cameras.head ? `<select id="head-view" aria-label="头部相机显示方式"><option value="" ${!headMode ? "selected" : ""}>完整原图</option><option value="crop-left" ${headMode ? "selected" : ""}>头部 · 左目</option><option value="crop-right">头部 · 右目</option></select>` : ""}</div><div class="camera-grid">${Object.entries(
+    `${recordNavigation(e,'quality',escape)}<div class="page-head review-head"><div><h1>${escape(e.episode_id || e.name)} <span style="vertical-align:middle;margin-left:8px">${outcome(e)}</span></h1><p>${escape(e.task || "未命名任务")} · ${fmt(e.duration_s, 2)} 秒 · ${Object.keys(e.cameras).length} 路相机 · ${e.message_count.toLocaleString()} 条消息</p></div><div class="actions"><button class="small" data-action="previous">← 上一条</button><button class="small" data-action="next">下一条 →</button></div></div><div class="review-layout"><section class="review-main"><div class="panel playback-panel"><div class="player-header"><span>移动操作回放</span><div class="visual-layout-switch" role="group" aria-label="可视化布局"><button data-stage-layout="balanced" aria-pressed="true">联看</button><button data-stage-layout="motion" aria-pressed="false">3D 轨迹</button><button data-stage-layout="video" aria-pressed="false">相机</button></div>${e.cameras.head ? `<select id="head-view" aria-label="头部相机显示方式"><option value="" ${!headMode ? "selected" : ""}>完整原图</option><option value="crop-left" ${headMode ? "selected" : ""}>头部 · 左目</option><option value="crop-right">头部 · 右目</option></select>` : ""}</div><div class="camera-grid">${Object.entries(
       e.cameras,
     )
       .map(
@@ -542,9 +555,8 @@ function renderReview(id) {
       .join(
         "",
       )}</div>${filmstripHTML(e,headMode)}${trajectoryHTML()}<div class="transport-area">${transportHTML(e)}<div class="segment-track" id="segment-track"></div><details class="analysis-tracks" id="analysis-tracks" open><summary>问题与任务进展时间轴</summary><div id="event-timeline" class="event-timeline"></div><div id="progress-timeline" class="warp-timeline"></div></details></div><details class="clip-editor" id="clip-editor"><summary><span>${icon("crop")}保留片段</span><small id="clip-summary">整段保留</small></summary><div class="clip-tools"><span>保留范围</span><button data-action="mark-in" title="将当前时刻设为起点 [">设起点 [</button><input type="number" id="clip-start" min="0" max="${e.duration_s}" step="0.01" value="0" aria-label="片段起点（秒）"><span>—</span><input type="number" id="clip-end" min="0" max="${e.duration_s}" step="0.01" value="${fmt(e.duration_s, 6)}" aria-label="片段终点（秒）"><button data-action="mark-out" title="将当前时刻设为终点 ]">设终点 ]</button><input class="clip-label" id="clip-label" placeholder="片段名称（可选）" aria-label="片段名称"><select id="clip-grade" aria-label="片段结论">${Object.entries(grades).map(([g,label])=>`<option value="${g}" ${g==="B"?"selected":""}>${label}</option>`).join("")}</select><button class="primary" data-action="add-clip">＋ 加入</button><button id="cancel-clip-edit" class="hidden" data-action="cancel-clip-edit">取消编辑</button></div><div class="clips" id="clips"></div></details></div></section><div class="panel details-panel"><div id="rating-overview" class="rating-overview">${ratingOverviewHTML(e)}</div><div class="detail-tabs" role="tablist" aria-label="审核面板">${[
-      ["progress", "任务"],
-      ["diagnostics", "质检"],
-      ["review", "审核"],
+      ["diagnostics", "数据问题"],
+      ["review", "保留与导出"],
     ]
       .map(
         ([id, label]) =>
@@ -552,7 +564,7 @@ function renderReview(id) {
       )
       .join(
         "",
-      )}<details class="detail-more"><summary>更多</summary><div class="detail-more-menu"><button data-detail="signals">关节曲线</button><button data-detail="streams">原始通道</button></div></details><span style="margin-left:auto;display:flex;align-items:center" id="decode-status">${cacheStatus(e)}</span></div><div class="detail-body" id="detail-body"></div><aside class="inspector" hidden><div class="inspector-fields"><div class="inspector-title"><h2>审核</h2><span id="save-state" class="save-state ${dirty ? "dirty" : ""}">${dirty ? "未保存" : draft.revision ? "已保存" : "尚未审核"}</span></div><div id="auto-grade-review" class="auto-grade-review">${gradeReviewHTML(e)}</div><label class="field-label">审核结论 <span class="muted">· 快捷键 1–4</span></label><div class="grade-picker">${Object.keys(
+      )}<details class="detail-more"><summary>更多</summary><div class="detail-more-menu"><button data-detail="progress">历史进展分析</button><button data-detail="signals">关节曲线</button><button data-detail="streams">原始通道</button></div></details><span style="margin-left:auto;display:flex;align-items:center" id="decode-status">${cacheStatus(e)}</span></div><div class="detail-body" id="detail-body"></div><aside class="inspector" hidden><div class="inspector-fields"><div class="inspector-title"><h2>审核</h2><span id="save-state" class="save-state ${dirty ? "dirty" : ""}">${dirty ? "未保存" : draft.revision ? "已保存" : "尚未审核"}</span></div><div id="auto-grade-review" class="auto-grade-review">${gradeReviewHTML(e)}</div><label class="field-label">审核结论 <span class="muted">· 快捷键 1–4</span></label><div class="grade-picker">${Object.keys(
       grades,
     )
       .map(
@@ -568,9 +580,15 @@ function renderReview(id) {
     img.onerror = () =>
       (img.parentElement.querySelector(".camera-error").hidden = false);
   });
+  if(e.snapshot){
+    for(const button of $$('.inspector button,.inspector textarea,[data-detail="review"],.clip-editor button'))button.disabled=true;
+    $('#clip-editor').hidden=true;
+    $('#player-status').textContent='本机缓存抽帧 · 2 Hz，非原始视频';
+    for(const button of $$('[data-frame-control]'))button.disabled=!Object.keys(e.cameras).length;
+  }
   setStageLayout(stageLayout);
   refreshFrames();
-  loadFramePlayer();
+  if(!e.snapshot)loadFramePlayer();
   renderClips();
   progressPanel = new ProgressPanel({episode:current,api,escape,toast,
     seek:t=>{setPlaying(false);playRange=null;seek(t);},
@@ -626,7 +644,7 @@ function renderReview(id) {
       seek(event.peak_s);
     },
   });
-  reviewTools.ensureLoaded();
+  if(!e.snapshot)reviewTools.ensureLoaded();
   renderDetail();
   updateReviewStep();
   if (reviewIntent?.id === id) {
@@ -634,7 +652,7 @@ function renderReview(id) {
     requestAnimationFrame(()=>{if(current?.id===id && page==='review') applyReviewAction(intent.action);});
   }
   if (e.cache === "ready") loadSignals();
-  else if (e.cache !== "building" && e.quality.grading?.grade !== "D")
+  else if (!e.snapshot && e.cache !== "building" && !["D","E"].includes(e.quality.grading?.grade))
     api("/api/analyze", { ids: [id] })
       .then(refresh)
       .catch((e) => toast(e.message, true));
@@ -704,6 +722,7 @@ function refreshFrames() {
     framePlayer.update(playhead, playing, exactFrame);
     return;
   }
+  if(current.snapshot){for(const img of $$("[data-camera]")){const url=frame(current,img.dataset.camera,Math.floor(playhead*2)/2);if(img.getAttribute("src")!==url)img.src=url;}return;}
   if (playing) return;
   for (const img of $$("[data-camera]"))
     if (!img.getAttribute("src"))
@@ -711,6 +730,7 @@ function refreshFrames() {
   lastFrame = performance.now();
 }
 function primaryTimes() {
+  if(current?.snapshot)return Array.from({length:Math.floor(current.duration_s*2)+1},(_,i)=>i/2);
   return framePlayer?.index?.cameras[primaryCamera]?.times_s || [];
 }
 function updateFrameCounter() {
@@ -718,7 +738,7 @@ function updateFrameCounter() {
   if (!el) return;
   const times = primaryTimes(),
     img = document.querySelector(`[data-camera="${primaryCamera}"]`);
-  const shown = img?.dataset.frameIndex;
+  const shown = current?.snapshot?nearestFrame(times,playhead):img?.dataset.frameIndex;
   el.textContent = `${shown === undefined ? "—" : String(Number(shown) + 1).padStart(4, "0")} / ${String(times.length).padStart(4, "0")} 帧`;
   el.dataset.target = String(
     exactFrame?.cam === primaryCamera
@@ -727,7 +747,7 @@ function updateFrameCounter() {
   );
 }
 function setPlaying(value) {
-  if (value && (!framePlayer?.index || frameError)) {
+  if (value && (current?.snapshot?!Object.keys(current.cameras).length:(!framePlayer?.index || frameError))) {
     toast("回放尚未就绪，请等待或重试。", true);
     return;
   }
@@ -742,7 +762,7 @@ function setPlaying(value) {
     b.setAttribute("aria-pressed", String(playing));
   }
   const s = $("#player-status");
-  if (s && !frameError) s.textContent = playing ? "播放中" : "就绪";
+  if (s && !frameError) s.textContent = current?.snapshot?'缓存抽帧 · 2 Hz · '+(playing?'播放中':'就绪'):playing ? "播放中" : "就绪";
   refreshFrames();
 }
 async function loadFramePlayer() {
@@ -840,7 +860,7 @@ function tick(time) {
   seek(Math.min(stop, playhead + dt * speed));
   if (time - fpsStart >= 1000) {
     if (!frameError)
-      $("#player-status").textContent =
+      $("#player-status").textContent = current.snapshot?'缓存抽帧 · 2 Hz · 播放中':
         `播放中 · ${Math.round((renderedFrames * 1000) / (time - fpsStart))} 帧/秒`;
     fpsStart = time;
     renderedFrames = 0;
@@ -864,7 +884,8 @@ async function loadSignals() {
     if(!data.has($('#robot-source').value))$('#robot-source').value=[...$('#robot-source').options].find(o=>!o.disabled)?.value||'state.q';
     renderDetail();
     mountRobot();
-    loadTrajectories();
+    if(!current.snapshot)loadTrajectories();
+    else $("#trajectory-status").textContent="缓存姿态回放 · 原始轨迹未导入";
   } catch (e) {
     if (token === reviewToken && $("#detail-body"))
       $("#detail-body").innerHTML =
@@ -880,8 +901,8 @@ function renderDetail() {
     b.classList.toggle("active", b.dataset.detail === activeTab),
   );
   const more=$('.detail-more');
-  if(more){const label={signals:'关节曲线',streams:'原始通道'}[detailTab];more.classList.toggle('active',!!label);more.querySelector('summary').textContent=label||'更多';}
-  const diagnostics=detailTab==='diagnostics';
+  if(more){const label={progress:'历史进展分析',signals:'关节曲线',streams:'原始通道'}[detailTab];more.classList.toggle('active',!!label);more.querySelector('summary').textContent=label||'更多';}
+  const diagnostics=detailTab!=='progress';
   $('#event-timeline').hidden=!diagnostics;
   $('#progress-timeline').hidden=diagnostics;
   $('#analysis-tracks>summary').textContent=diagnostics?'质检时间轴':'任务时间轴';
@@ -899,11 +920,13 @@ function renderDetail() {
   progressPanel?.unmount();
   if (detailTab === "review") return;
   if (detailTab === "diagnostics") {
+    if(current.snapshot){host.innerHTML=curationEvidenceHTML(current);return;}
     reviewTools?.mount(host);
     return;
   }
   if (detailTab === "quality") {
-    host.innerHTML = ratingDetailsHTML(current) + gradeReportHTML(current) + `<details class="grade-policy reference-checks"><summary>采样与数值复查 <span class="muted">· 参考检查</span></summary><div id="reference-checks-body">正在读取原始通道…</div></details><h3 class="quality-subheading">技术提醒与审核待办</h3><div class="issues">${current.quality.issues.map((i) => `<div class="issue ${i.level}"><span class="issue-icon">${icon(i.level === "error" ? "close" : "info")}</span><div><strong>${escape(i.label)}</strong><p>${escape(i.detail)}</p></div></div>`).join("") || '<div class="hint">当前规则范围内未发现异常。</div>'}</div><button class="text-btn" data-action="retry-analysis">重新运行解析</button>`;
+    if(current.snapshot){host.innerHTML=curationEvidenceHTML(current);return;}
+    host.innerHTML = ratingDetailsHTML(current) + `<details class="grade-policy reference-checks"><summary>采样与数值复查 <span class="muted">· 参考检查</span></summary><div id="reference-checks-body">正在读取原始通道…</div></details><h3 class="quality-subheading">技术提醒与审核待办</h3><div class="issues">${current.quality.issues.map((i) => `<div class="issue ${i.level}"><span class="issue-icon">${icon(i.level === "error" ? "close" : "info")}</span><div><strong>${escape(i.label)}</strong><p>${escape(i.detail)}</p></div></div>`).join("") || '<div class="hint">当前规则范围内未发现异常。</div>'}</div><button class="text-btn" data-action="retry-analysis">重新运行解析</button>`;
     loadReferenceChecks();
     return;
   }
@@ -1234,6 +1257,7 @@ function importDialog() {
   $("#import-path").focus();
 }
 function batchDialog() {
+  if([...selected].some(id=>catalog.episodes.find(e=>e.id===id)?.snapshot)){toast('所选含只读证据快照，请导入原始文件后保存审核。',true);return;}
   dialog(
     "批量设置审核结论",
     `<p>为已选的 ${selected.size} 条记录设置审核结论，原有任务指令、标签和片段保留不变。每条修改都会写入审核历史。</p><label class="field-label">审核结论</label><select id="batch-grade">${Object.entries(
@@ -1289,6 +1313,12 @@ function exportDialog(ids, preferredKind = null) {
     toast("请先选择记录，或保存至少一条“通过 / 处理后保留”的审核结论。", true);
     return;
   }
+  if(exportIds.some(id=>catalog.episodes.find(e=>e.id===id)?.snapshot)){
+    const rows=exportIds.map(id=>catalog.episodes.find(e=>e.id===id)).filter(Boolean);
+    const eligible=rows.filter(e=>['A','B','C'].includes(e.quality.grading?.grade));
+    dialog('导出质量筛选清单',`<p>已选 ${rows.length} 条，合格候选 ${eligible.length} 条，筛出或待准入 ${rows.length-eligible.length} 条。</p><p>导出评分与记录清单，按任务及仿真、实操数据域分别列出。训练包在原始录制导入后生成。</p>`, '<button class="primary" data-action="download-curation">下载 JSON 清单</button>');
+    return;
+  }
   const allApproved = exportIds.every((id) =>
     ["A", "B"].includes(
       catalog.episodes.find((e) => e.id === id)?.review.grade,
@@ -1311,6 +1341,7 @@ function exportDialog(ids, preferredKind = null) {
 }
 async function saveReview(next = false) {
   if (!current) return;
+  if(current.snapshot){toast('当前为只读证据快照，请先导入原始文件。',true);return;}
   const ep = current.id,
     snapshot = copy(draft);
   const result = await api("/api/reviews", {
@@ -1352,23 +1383,8 @@ async function renderRules() {
   page = "rules";
   const r = await api("/api/rules");
   if (page !== "rules") return;
-  const levels = [
-    ["A", "check", "优质", "必需通道齐全、数值有效，30 Hz 对齐覆盖率 ≥ 99%，采样、跟踪误差与温度均在当前规则范围内。"],
-    ["B", "sliders", "良好", "覆盖率 ≥ 95%，没有无效数值或时间戳异常；存在轻微覆盖损失或采样、运动、温度提醒。"],
-    ["C", "search", "需修整", "仍有可对齐样本，但覆盖率低于 95%，或存在 NaN / Inf、时间戳异常。定位问题并裁剪或修正。"],
-    ["D", "close", "当前不可用", "文件不可读，必需通道缺失、为空或维度错误，或没有任何完整可对齐样本。当前 G1 工作流需要补录或修复。"],
-  ];
-  $("#main").innerHTML =
-    `<div class="page-head"><div><h1>分级与质检</h1><p>根据数据特征自动评级，人工确认任务成效与最终用途。</p></div></div><div class="rules-grid"><section class="panel grade-standards"><div class="standards-heading"><div><h2>数据分级</h2><p>按最差已测维度决定整段等级，不按比例强制分配档位。</p></div></div><div class="grade-standard-list">${levels.map(([g, i, title, description]) => `<article class="grade-standard grade-standard-${g}"><span class="grade-code">${g}</span><div><div class="grade-standard-title"><h3>${title}</h3></div><p>${description}</p></div></article>`).join("")}</div><details class="grade-policy"><summary>${icon("info")}评估范围与审核结论</summary><p>未解析显示“待评估”。任务指令缺失、采集端成败和原转换流程限制作为审核待办单列，不降低已测数据等级。</p><p>自动等级检查数值和时序，尚不判断图像清晰度、遮挡或任务成功。审核结论使用“通过、处理后保留、待复核、排除”，与数据质量 A–D 分开显示；自动评级不会覆盖人工记录。</p></details></section><section class="panel padded rule-settings"><div class="standards-heading"><div><h2>质检阈值</h2><p>保存后重新评估已有解析结果。</p></div></div>${Object.entries(
-      r.rules,
-    )
-      .map(
-        ([k, v]) =>
-          `<label class="rule-field"><span>${escape(r.labels[k])}</span><input type="number" data-rule="${k}" value="${v}" min="0.001" step="any"></label>`,
-      )
-      .join(
-        "",
-      )}<details class="grade-policy"><summary>${icon("info")}覆盖率与等级边界</summary><p>按 30 Hz 检查三路图像、41 维状态和动作共同有效的时刻，占整段采样时刻的比例。状态不跨越超过 100 ms 的间隔插值，动作和图像不采用未来数据。</p><p>99% / 95% 是本项目 v1 的初始工程门槛，并非模型效果结论。覆盖率检查不包含 JPEG 完整解码；图像内容仍需回放审核。</p></details><div class="actions rule-actions"><button data-action="reset-rules">恢复默认</button><button class="primary" data-action="save-rules">保存规则</button></div></section></div>`;
+  const levels=[['A','优先候选','完整任务候选内前约 25%'],['B','常规候选','随后约 25%'],['C','低优先候选','其余完整任务候选'],['D','已筛出','任务未完成，不参与质量评分'],['E','已筛出','任务过程不完整，不参与质量评分'],['R','待准入复核','证据不够，不参与评分'],['U','待任务识别','尚无适用任务与模型']];
+  $('#main').innerHTML=`<div class="page-head"><div><h1>数据质量分级</h1><p>先检查过程完整性与任务结果，再对同任务候选进行排序。</p></div></div><section class="panel padded"><div class="grade-standard-list">${levels.map(([g,t,d])=>`<article class="grade-standard"><span class="grade-code">${g}</span><div><h3>${t}</h3><p>${d}</p></div></article>`).join('')}</div><p>评分使用DemInf学习的状态—动作信息；A、B、C表示同任务候选的相对选择优先级。</p><p>${escape(catalog.curation?.benchmark?.selection_efficacy||'尚未建立本任务基准')}</p></section>`;
 }
 
 function renderExports() {
@@ -1377,9 +1393,9 @@ function renderExports() {
   const todo = catalog.episodes.filter(e=>workflowState(e).queue==='review').length;
   const complete = catalog.episodes.filter(e=>workflowState(e).queue==='complete').length;
   $("#main").innerHTML = `<div class="page-head"><div><h1>导出中心</h1><p>先检查所选记录，再创建数据包。</p></div><button class="primary" data-action="new-export">创建导出</button></div>
-  <section class="panel export-readiness"><div><h2>${icon('export')}导出准备</h2><p>可预检 ${ready} 条 · 待复核 ${todo} 条 · 待完善 ${complete} 条</p><span class="muted">可预检仅表示基础条件满足，不代表图像完整性和实际导出已通过。</span></div><div class="actions"><button data-queue-nav="review">${icon('search')}继续复核</button><button data-queue-nav="preflight">${icon('list')}查看可预检记录</button></div></section>
+  <section class="panel export-readiness"><div><h2>${icon('export')}导出准备</h2><p>可预检 ${ready} 条 · 待复核 ${todo} 条 · 待完善 ${complete} 条</p><span class="muted">预检将逐项检查图像完整性、时间区间和导出输入。</span></div><div class="actions"><button data-queue-nav="review">${icon('search')}继续复核</button><button data-queue-nav="preflight">${icon('list')}查看可预检记录</button></div></section>
   <section class="panel"><div class="panel-head"><h2>导出任务</h2></div><div id="export-list"><div class="empty">读取导出任务…</div></div></section>
-  <details class="panel export-format-details"><summary>${icon('info')}数据包内容与使用约定</summary><p>通用训练包包含 NPZ 状态 / 动作、原始 JPEG 图像、JSON 审核和来源信息。有效性掩码标明可用时刻；训练序列不得跨越无效区间。</p><p>当前格式可检查并继续转换，接入具体模型时需确认字段与预处理。它不是原生 LeRobot / RLDS 数据集。</p></details>`;
+  <details class="panel export-format-details"><summary>${icon('info')}数据包内容与使用约定</summary><p>通用训练包包含 NPZ 状态 / 动作、原始 JPEG 图像、JSON 审核和来源信息。有效性掩码标明可用时刻；训练序列不得跨越无效区间。</p><p>接入训练模型时，按目标接口配置字段、单位与预处理。</p></details>`;
   loadExports();
 }
 async function loadExports() {
@@ -1404,11 +1420,11 @@ function renderGuide() {
     `<div class="page-head"><div><h1>从采集记录到训练数据</h1><p>第一次使用，按这五步完成一轮筛选。</p></div></div><section class="panel guide">${[
       [
         "认识这批数据",
-        "当前样例包含 G1 身体关节、双手、三路 RGB 相机和遥操作参考。采集端成功标记反映操作者的判断，不代表数据已满足模型训练要求。",
+        "样例包含G1身体关节、双手、三路RGB相机和遥操作参考。导出前依次检查采集标记、人工审核与片段质量。",
       ],
       [
         "查看任务与技术质检",
-        "审核页有“任务、质检、审核”三个主入口。已安装任务模型时，可在“任务”中查看阶段和待复核片段；“分析设置”可选择阶段模型或 WARP。未安装模型时先进行技术质检和人工审核。技术分采用 10 分制，点击“评分依据”查看构成；任务是否成功仍需结合画面判断。",
+        "进入记录后，相机、3D 和联看共用播放器与时间轴。右侧“完成条件、人工复核”核对 VLM 的目标判断和每次尝试。点击“MiniMax 审核”选择范本并提交。数据工作台按已分析阶段的未完成尝试、证据不足和人工保留结论筛选；局部结果不代表整条任务已审核。",
       ],
       [
         "同步回放并保留片段",
@@ -1432,7 +1448,15 @@ function renderGuide() {
       )}<div class="padded hint">工作空间：${escape(catalog.workspace)}<br>审核数据库：reviews.sqlite3 · 派生缓存：cache/ · 导出：exports/<br>备份审核结果时可导出筛选清单；完整工作空间备份请先停止服务，再复制目录。<br>公开参考：<a class="subtle-link" href="https://github.com/huggingface/lerobot" target="_blank" rel="noreferrer">LeRobot ↗</a> · <a class="subtle-link" href="https://github.com/ARISE-Initiative/robomimic" target="_blank" rel="noreferrer">robomimic ↗</a></div></section>`;
 }
 
+function selectCandidateRows(priorityOnly){
+  const ids=selectCandidates(filtered(),priorityOnly);
+  selected.clear();for(const id of ids)selected.add(id);
+  updateLibrary();
+  toast(ids.length?`已选择 ${ids.length} 条${priorityOnly?'优先':'合格'}候选，可导出清单。`:'当前筛选范围没有合格候选。',!ids.length);
+}
 const actions = {
+  'select-qualified':()=>selectCandidateRows(false),
+  'select-priority':()=>selectCandidateRows(true),
   "chart-in": () => {
     const w = currentWindow(),
       anchor = Math.max(w[0], Math.min(w[1], playhead));
@@ -1523,16 +1547,19 @@ const actions = {
     renderLibrary();
   },
   analyze: async () => {
-    await api("/api/analyze", { ids: catalog.episodes.map((e) => e.id) });
+    await api("/api/analyze", { ids: catalog.episodes.filter(e=>!e.snapshot).map((e) => e.id) });
     toast("深度质检已加入队列，可继续审核。");
     refresh();
   },
   "analyze-selected": async () => {
-    await api("/api/analyze", { ids: [...selected] });
+    const ids=[...selected].filter(id=>!catalog.episodes.find(e=>e.id===id)?.snapshot);
+    if(!ids.length){toast('证据快照不能重新解析，请先导入原始文件。',true);return;}
+    await api("/api/analyze", { ids });
     toast("所选记录已加入质检队列。");
     refresh();
   },
   "retry-analysis": async () => {
+    if(current.snapshot){toast('证据快照不能重新解析，请先导入原始文件。',true);return;}
     await api("/api/analyze", { ids: [current.id], rebuild: true });
     toast("已请求重新解析。");
     refresh();
@@ -1557,6 +1584,14 @@ const actions = {
     toast(`已保存 ${changes.length} 条审核结论。`);
   },
   "export-selected": () => exportDialog([...selected]),
+  "download-curation": () => {
+    const rows=exportIds.map(id=>catalog.episodes.find(e=>e.id===id)).filter(Boolean);
+    const item=e=>({id:e.id,name:e.name,source_path:e.path,source_sha256:e.curation?.source_sha256,cohort:e.curation?.cohort||'unknown',grade:e.quality.grading.grade,score:e.quality.rating.score,reason:e.quality.grading.summary,snapshot:!!e.snapshot});
+    const result={version:catalog.curation?.version||'curation-v2-admission-first',completeness_scored:false,external_quality_certified:false,includes_raw_data:false,episodes:rows.filter(e=>['A','B','C'].includes(e.quality.grading.grade)).map(item),excluded:rows.filter(e=>!['A','B','C'].includes(e.quality.grading.grade)).map(item)};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));
+    const a=document.createElement('a');a.href=url;a.download='RoboCurate-quality-selection.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $('#dialog').close();toast(`已导出 ${result.episodes.length} 条候选，另列 ${result.excluded.length} 条筛出或待准入记录。`);
+  },
   "new-export": () => exportDialog(selected.size ? [...selected] : undefined),
   "confirm-export": async () => {
     const r = await api("/api/exports", exportOptions());
@@ -1681,6 +1716,7 @@ document.addEventListener("click", async (e) => {
     if (qualityFilter) {chooseOverviewFilter('auto',qualityFilter.dataset.qualityFilter);return;}
     const queueFilter = e.target.closest('[data-queue-filter]');
     if (queueFilter) {chooseOverviewFilter('queue',queueFilter.dataset.queueFilter);return;}
+    if(e.target.closest('[data-open-templates]')){await openTemplateManager();return;}
     const workflow = e.target.closest('[data-workflow-open]');
     if (workflow) {
       const record = catalog.episodes.find(r=>r.id===workflow.dataset.workflowOpen);
@@ -1800,7 +1836,7 @@ document.addEventListener("click", async (e) => {
     }
     if (e.target.closest("input,a,button,select")) return;
     const row = e.target.closest("[data-ep]");
-    if (row) location.hash = "review/" + row.dataset.ep;
+    if (row) location.hash = "record/" + row.dataset.ep;
   } catch (err) {
     if ($("#dialog").open) errorDialog(err);
     else toast(err.message, true);
@@ -1834,6 +1870,8 @@ document.addEventListener("change", (e) => {
     checkExport();
     return;
   }
+  if(t.id==='filter-source'){filters.source=t.value;updateLibrary();return;}
+  if(t.id==='filter-stageaudit'){filters.stageaudit=t.value;updateLibrary();return;}
   if (t.classList.contains("select-ep")) {
     t.checked ? selected.add(t.dataset.id) : selected.delete(t.dataset.id);
     updateLibrary();
@@ -1954,6 +1992,10 @@ document.addEventListener("dblclick", (e) => {
   }
 });
 async function route() {
+  const epoch=++routeEpoch;
+  if(taskflowPanel?.recording)recordViewStates.set(taskflowPanel.recording.id,taskflowPanel.viewState());
+  taskflowPanel?.destroy();taskflowPanel=null;
+  simDemo?.destroy();simDemo=null;
   progressPanel?.destroy();
   progressPanel = null;
   playing = false;
@@ -1966,34 +2008,44 @@ async function route() {
   reviewTools?.destroy();
   reviewTools = null;
   reviewToken++;
-  const [view, id] = location.hash.slice(1).split("/");
+  let [view,id,runId]=location.hash.slice(1).split("/");
+  if(view==='rules'){view='library';history.replaceState(null,'','#library');}
+  if(view==='taskflow'&&!id){view='library';history.replaceState(null,'','#library');}
+  if(view==='taskflow'&&id){const run=auditOverview?.runs.find(r=>r.id===id),asset=auditOverview?.assets.find(a=>a.id===run?.asset_id),record=catalog.episodes.find(r=>asset?.source.kind==='recording'&&r.id===asset.source.id);if(record){runId=id;id=record.id;view='record';history.replaceState(null,'',`#record/${id}/${runId}`);}}
+  if(view==='review'){view='record';history.replaceState(null,'',`#record/${id}`);}
   page = view || "library";
   $$("[data-nav]").forEach(a=>{
-    const active=a.dataset.nav===(page==='review'?'library':page);
+    const active=a.dataset.nav===(['review','record','taskflow'].includes(page)?'library':page);
     a.classList.toggle('active',active);
     if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
   });
   $("#breadcrumb").textContent =
     {
+      taskflow: "视频阶段审核",
+      record: "记录审核",
       library: "数据工作台",
-      review: "记录审核",
+      review: "记录审核 / 数据质检与轨迹",
       exports: "导出中心",
       rules: "分级与质检规则",
       guide: "使用指南",
+      'sim-demo': "仿真参考演示",
     }[page] || "数据工作台";
   try {
     if (page === "review") renderReview(id);
+    else if (page === 'taskflow'||page==='record') {const {Taskflow}=await import('./taskflow.mjs');if(epoch!==routeEpoch)return;const record=page==='record'?catalog.episodes.find(r=>r.id===id):null;if(page==='record'&&!record)throw Error('未找到这条采集记录。');taskflowPanel=new Taskflow($('#main'),api,escape);await taskflowPanel.mount(page==='record'?runId:id,{recording:record,savedState:recordViewStates.get(record?.id)});if(epoch===routeEpoch&&reviewIntent?.id===record?.id){const action=reviewIntent.action;reviewIntent=null;taskflowPanel.setDetailTab(['instruction','decision','review'].includes(action)?'manual':'criteria');}}
     else if (page === "rules") await renderRules();
     else if (page === "exports") renderExports();
     else if (page === "guide") renderGuide();
+    else if (page === 'sim-demo') {const {SimDemo}=await import('./sim-demo.mjs');if(page==='sim-demo'){simDemo=new SimDemo($('#main'),api,escape);await simDemo.mount();}}
     else renderLibrary();
-    window.scrollTo(0, 0);
+    if(epoch===routeEpoch)window.scrollTo(0, 0);
   } catch (e) {
     toast(e.message, true);
   }
 }
 window.addEventListener("hashchange", route);
 installIcons();
+installMiniMaxAccess(api);
 updateThemeLabel();
 setSidebarCollapsed(document.documentElement.dataset.sidebar === 'collapsed', false);
 window.addEventListener('resize',()=>{

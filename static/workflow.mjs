@@ -14,7 +14,8 @@ export function hasInstruction(text) {
 }
 export function workflowState(record) {
   const grade = record.review.grade;
-  if (grade === 'D' || record.quality.grading?.grade === 'D')
+  if(record.snapshot)return {queue:['D','E'].includes(record.quality.grading?.grade)?'excluded':'review',action:'inspect',label:'查看评分与回放'};
+  if (grade === 'D' || ['D','E'].includes(record.quality.grading?.grade))
     return { queue: 'excluded', action: 'inspect', label: '查看原因' };
   if (record.cache !== 'ready')
     return { queue: 'analyze', action: 'analyze', label: record.cache === 'building' ? '质检中' : record.cache === 'error' ? '重试质检' : '运行质检' };
@@ -25,7 +26,8 @@ export function workflowState(record) {
   return { queue: 'preflight', action: 'preflight', label: '导出预检' };
 }
 export function nextReviewStep(record, draft, dirty) {
-  if (record.quality.grading?.grade === 'D')
+  if(record.snapshot)return {action:"inspect",title:"本机只读证据",detail:"可检查质量分级和回放；导出训练包需要原始数据。",button:"查看评分依据"};
+  if (['D','E'].includes(record.quality.grading?.grade))
     return { action: 'inspect', title: '先核对数据缺失', detail: '当前数据不满足训练条件，可继续查看原因和保存审核结论。', button: '查看缺失原因' };
   if (record.cache !== 'ready')
     return { action: 'analyze', title: record.cache === 'building' ? '正在进行质检' : '先完成深度质检', detail: '质检完成后查看数据等级与问题位置。', button: record.cache === 'building' ? '质检中' : '运行质检', disabled: record.cache === 'building' };

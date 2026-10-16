@@ -62,10 +62,12 @@ export function parseFrameBatch(buffer) {
 }
 
 export class FramePlayer {
-  constructor(ep, { status = () => {}, painted = () => {} } = {}) {
+  constructor(ep, { status = () => {}, painted = () => {}, root = document, indexUrl = null } = {}) {
     this.ep = ep;
     this.status = status;
     this.onPainted = painted;
+    this.root = root;
+    this.indexUrl = indexUrl || '/api/frame-index?ep=' + ep;
     this.alive = true;
     this.index = null;
     this.time = 0;
@@ -80,7 +82,7 @@ export class FramePlayer {
   }
   async load() {
     this.status("正在读取帧索引…");
-    const r = await fetch("/api/frame-index?ep=" + this.ep);
+    const r = await fetch(this.indexUrl);
     if (!r.ok) throw Error((await r.json()).error || "帧索引读取失败");
     const index = await r.json();
     if (!this.alive) return;
@@ -113,7 +115,7 @@ export class FramePlayer {
   }
   paint(cam) {
     if (!this.alive) return;
-    const img = document.querySelector(`[data-camera="${cam}"]`);
+    const img = this.root.querySelector(`img[data-camera="${cam}"]`);
     if (!img) return;
     const times = this.index.cameras[cam].times_s,
       i = this.targetIndex(cam),

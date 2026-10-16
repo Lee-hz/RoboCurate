@@ -120,7 +120,7 @@ def train(args):
     torch.set_num_threads(args.threads)
     torch.manual_seed(args.seed); random.seed(args.seed); np.random.seed(args.seed)
     rng = np.random.default_rng(args.seed)
-    config = WarpConfig(feature_stride=args.feature_stride, source_standard_stride=args.source_standard_stride)
+    config = WarpConfig(window_size=getattr(args, 'window_size', 32), feature_stride=args.feature_stride, source_standard_stride=args.source_standard_stride)
     groups, audit = load_manifest(args.manifest, config)
     architecture = dict(d_model=args.d_model, n_heads=args.n_heads, n_layers=args.n_layers,
                         dropout=.15, stochastic_depth_p=.1)
@@ -208,6 +208,7 @@ def main():
     p.add_argument('--lr', type=float, default=1e-4); p.add_argument('--warmup-steps', type=int, default=1000)
     p.add_argument('--eval-every', type=int, default=200); p.add_argument('--eval-batches', type=int, default=8)
     p.add_argument('--seed', type=int, default=42); p.add_argument('--feature-stride', type=int, default=1)
+    p.add_argument('--window-size', type=int, default=32)
     p.add_argument('--source-standard-stride', type=int, default=15)
     p.add_argument('--d-model', type=int, default=768); p.add_argument('--n-layers', type=int, default=12)
     p.add_argument('--n-heads', type=int, default=8)

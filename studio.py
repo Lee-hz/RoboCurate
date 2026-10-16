@@ -26,9 +26,13 @@ from frames import FrameStore
 from quality_evidence import native_reference_checks, VERSION as REFERENCE_CHECK_VERSION
 from trajectories import build_trajectories, VERSION as TRAJECTORY_VERSION
 from progress_service import ProgressService
+from task_audit_service import TaskAuditService
+from curation.bridge import project_quality
+from execution_quality import ExecutionQualityService
+from taskflow.service import TaskflowService
+from taskflow import http as taskflow_http
 
 APP=Path(__file__).resolve().parent
-ALLOW_REMOTE=False  # set by main() when bound beyond loopback
 
 
 class StudioLibrary(viewer.Library):
@@ -49,6 +53,9 @@ class StudioLibrary(viewer.Library):
         self.trajectory_memo=OrderedDict()
         self.trajectory_lock=threading.Lock()
         self.progress_service=ProgressService(self)
+        self.task_audit=TaskAuditService(self.workspace/'task-audit')
+        self.execution_quality=ExecutionQualityService(self)
+        self.taskflow=TaskflowService(self)
 
     def trajectories(self,ep,robot):
         if robot is None:raise ValueError('缺少机器人结构描述')
@@ -168,6 +175,8 @@ class StudioLibrary(viewer.Library):
             # An old or still-building cache must not be advertised as fresh QC.
             qc=assess(ref,info,cache if stamp else cache/'not-ready',rules)
             hit=(key,qc);self.qcs[ref.id]=hit
+        curation=self.task_audit.curation().get('episodes',{}).get(ref.id)
+        quality=project_quality(hit[1],curation)
         review=(reviews if reviews is not None else self.store.all()).get(ref.id,Store.empty())
         stale=bool(review['grade'] and review.get('source_fingerprint')!=dict(zip(['size','mtime_ns'],self.probes[ref.id][0])))
         blockers=[]
@@ -177,16 +186,18 @@ class StudioLibrary(viewer.Library):
         if state['state']!='ready':blockers.append('待深度解析')
         if stale:blockers.append('源文件变更，待重新审核')
         if hit[1]['grading']['grade']=='D':blockers.append('自动数据等级 D，当前数据不可用')
-        return {**ref.to_json(),**info,'quality':hit[1],'review':review,'review_stale':stale,
+        if quality['grading']['grade'] not in ('A','B','C'):blockers.append('未通过当前任务准入，不能作为完整演示入选')
+        return {**ref.to_json(),**info,'curation':curation,'quality':quality,'review':review,'review_stale':stale,
                 'readiness':dict(ready=not blockers,blockers=blockers),
                 'cache':state['state'],'cache_message':state.get('message',''),
-                'effective_grade':review['grade'] or hit[1]['suggested_grade']}
+                'effective_grade':review['grade'] or quality['suggested_grade']}
 
     def catalog(self):
         reviews=self.store.all()
         with self._lock: ids=list(self.order)
         episodes=[self.record(self.ref(ep),reviews) for ep in ids]
-        return dict(episodes=episodes,roots=[str(p) for p in self.roots],workspace=str(self.workspace),
+        episodes.extend(r for r in self.task_audit.workbench_records() if r['id'] not in ids)
+        return dict(episodes=episodes,curation={k:v for k,v in self.task_audit.curation().items() if k!='episodes'},roots=[str(p) for p in self.roots],workspace=str(self.workspace),
                     counts=dict(total=len(episodes),reviewed=sum(bool(e['review']['grade']) for e in episodes),
                                 ready=sum(e['cache']=='ready' for e in episodes),success=sum(e['outcome'] is True for e in episodes)))
 
@@ -393,20 +404,19 @@ class Handler(viewer.Handler):
         return data
 
     def _local(self):
-        # Same-origin is always required. The Host allowlist is only lifted
-        # when the operator asked for a non-loopback bind (--host).
         host=self.headers.get('Host','').split(':')[0]
         origin=self.headers.get('Origin')
-        if origin and urlparse(origin).netloc!=self.headers.get('Host'):
-            self._json({'error':'仅允许同源访问'},status=403);return False
-        if not ALLOW_REMOTE and host not in ('127.0.0.1','localhost'):
+        if host not in ('127.0.0.1','localhost') or (origin and urlparse(origin).netloc!=self.headers.get('Host')):
             self._json({'error':'仅允许本地同源访问'},status=403);return False
         return True
 
     def do_POST(self):
         if not self._local():return
         try:
-            route=urlparse(self.path).path;body=self._body_json();lib=self.library
+            parsed=urlparse(self.path);route=parsed.path;lib=self.library
+            if route=='/api/taskflow/upload':return taskflow_http.upload(self,parse_qs(parsed.query))
+            body=self._body_json()
+            if route.startswith('/api/taskflow/'):return taskflow_http.post(self,route,body)
             if route=='/api/roots':
                 path=Path(str(body.get('path',''))).expanduser()
                 if not str(body.get('path','')).strip():raise ValueError('请输入本机数据目录')
@@ -435,6 +445,7 @@ class Handler(viewer.Handler):
                 return self._json(dict(reviews=lib.store.save_many(patches)))
             if route=='/api/reviews/restore':return self._json(dict(reviews=lib.restore_review(body)))
             if route=='/api/preflight':return self._json(lib.preflight(body))
+            if route=='/api/execution-quality/review':return self._json(lib.execution_quality.save(body))
             if route=='/api/progress/jobs':return self._json(lib.progress_service.start(body.get('ep'),body.get('model_id')),status=202)
             if route=='/api/progress/cancel':return self._json(lib.progress_service.cancel(body.get('id')))
             if route=='/api/rules':
@@ -455,7 +466,19 @@ class Handler(viewer.Handler):
         if not self._local():return
         try:
             parsed=urlparse(self.path);route=parsed.path;qs=parse_qs(parsed.query);lib=self.library
+            if route=='/api/taskflow' or route.startswith('/api/taskflow/'):return taskflow_http.get(self,route,qs)
             if route=='/api/health':return self._json(dict(ok=True,app='RoboCurate',workspace=str(lib.workspace),episodes=len(lib.order)))
+            if route=='/api/sim-demo':
+                root=lib.workspace/'sim-demo'
+                index=json.loads((root/'index.json').read_text())
+                ep=qs.get('ep',[''])[0]
+                if not ep:return self._json(index,cache='no-store')
+                if not any(r['id']==ep for r in index['records']):raise KeyError('没有该仿真演示记录')
+                return self._json(json.loads((root/(ep+'.json')).read_text()),cache='no-store')
+            if route=='/task-audit.html':
+                self.send_response(302);self.send_header('Location','/#library');self.send_header('Content-Length','0');self.end_headers();return
+            if route in ('/api/meta','/api/series') and lib.task_audit.has_snapshot(qs.get('ep',[''])[0]) and qs.get('ep',[''])[0] not in lib.order:
+                return self._send(lib.task_audit.signal_bytes(qs['ep'][0],'meta' if route=='/api/meta' else 'series'),'application/json' if route=='/api/meta' else 'application/octet-stream',cache='private, no-cache')
             if route in ('/api/meta','/api/series'):
                 ep=self._episode(parsed.query)
                 if ep is None:return
@@ -464,7 +487,12 @@ class Handler(viewer.Handler):
                                   'application/json' if is_meta else 'application/octet-stream',
                                   cache='private, no-cache',etag=ep.etag_meta if is_meta else ep.etag_series)
             if route=='/api/catalog':return self._json(lib.catalog(),cache='no-store')
+            if route=='/api/task-audit':return self._json(lib.task_audit.catalog(),cache='no-store')
+            if route=='/api/task-audit/curve':return self._json(lib.task_audit.curve(qs.get('ep',[''])[0]),cache='no-store')
+            if route=='/api/task-audit/objects':return self._json(lib.task_audit.objects(qs.get('ep',[''])[0]),cache='no-store')
+            if route=='/api/task-audit/frame':return self._send(lib.task_audit.frame(qs.get('ep',[''])[0],float(qs.get('t',['0'])[0])),'image/jpeg',cache='private, no-cache')
             if route=='/api/progress/models':return self._json(lib.progress_service.models(),cache='no-store')
+            if route=='/api/execution-quality':return self._json(lib.execution_quality.current(qs.get('ep',[''])[0],qs.get('model_id',[''])[0]),cache='no-store')
             if route=='/api/progress':return self._json(lib.progress_service.current(qs.get('ep',[''])[0],qs.get('model_id',[''])[0]),cache='no-store')
             if route=='/api/progress/job':return self._json(lib.progress_service.public_job(lib.progress_service.job(qs.get('id',[''])[0])),cache='no-store')
             if route=='/api/frame-index':return self._json(lib.frame_store.public_index(qs.get('ep',[''])[0]),cache='private, no-cache')
@@ -486,6 +514,8 @@ class Handler(viewer.Handler):
                 self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Length',str(p.stat().st_size));self.send_header('Content-Disposition',f'attachment; filename="{name}"');self.end_headers()
                 with p.open('rb') as f:shutil.copyfileobj(f,self.wfile)
                 return
+            if route=='/api/frame' and 'cam' in qs and qs.get('ep',[''])[0] not in lib.order and lib.task_audit.has_snapshot(qs.get('ep',[''])[0]):
+                return self._send(lib.task_audit.frame(qs['ep'][0],float(qs.get('t',['0'])[0])),'image/jpeg',cache='private, no-cache')
             if route=='/api/frame' and 'cam' in qs:
                 if 'i' in qs:
                     _,frames=lib.frame_store.batch(qs['ep'][0],qs['cam'][0],int(qs['i'][0]),1,qs.get('token',[None])[0])
@@ -508,10 +538,7 @@ class Handler(viewer.Handler):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('paths',nargs='*',type=Path)
     ap.add_argument('--port',type=int,default=8421);ap.add_argument('--workspace',type=Path,default=APP/'workspace')
-    ap.add_argument('--host',default='127.0.0.1',help='bind address; 0.0.0.0 exposes the app to the local network')
     ap.add_argument('--analyze',action='store_true');args=ap.parse_args()
-    global ALLOW_REMOTE
-    ALLOW_REMOTE=args.host not in ('127.0.0.1','localhost','::1')
     lib=StudioLibrary(args.workspace.resolve())
     paths=args.paths or lib.store.setting('roots',[])
     for path in paths:
@@ -524,14 +551,15 @@ def main():
     if args.analyze:
         for ep in lib.order:lib.prepare(ep)
     handler=partial(Handler,library=lib,robot=robot)
-    with viewer.ThreadingHTTPServer((args.host,args.port),handler) as http:
+    with viewer.ThreadingHTTPServer(('127.0.0.1',args.port),handler) as http:
         lib.recover_jobs()
-        shown='127.0.0.1' if args.host in ('127.0.0.1','0.0.0.0') else args.host
-        print(f'RoboCurate: http://{shown}:{args.port} · {len(lib.order)} records',flush=True)
-        if ALLOW_REMOTE:print(f'监听 {args.host}：同一局域网的其他机器可访问，且没有任何身份验证。',flush=True)
+        lib.taskflow.recover()
+        print(f'RoboCurate: http://127.0.0.1:{args.port} · {len(lib.order)} records',flush=True)
         try:http.serve_forever()
         except KeyboardInterrupt:pass
-        finally:lib.progress_service.close()
+        finally:
+            lib.taskflow.close()
+            lib.progress_service.close()
 
 
 if __name__=='__main__':main()

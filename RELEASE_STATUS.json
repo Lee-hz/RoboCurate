@@ -30,5 +30,8 @@
   "release_includes_model_weights": true,
   "includes_training_source": true,
   "includes_private_annotations": false,
-  "model_release_manifest": "models/release.json"
+  "model_release_manifest": "models/release.json",
+  "source_update": "2026-10-16-vlm-minimax",
+  "source_update_model": "HORIZON-MiniMax",
+  "source_update_scope": "local per-install API credentials and unified VLM review"
 }
