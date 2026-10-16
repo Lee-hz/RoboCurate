@@ -4,11 +4,12 @@ export function installMiniMaxAccess(api) {
   dialog.setAttribute('aria-labelledby','minimax-title');
   dialog.innerHTML=`<form class="minimax-form">
     <header><div><h2 id="minimax-title">MiniMax 接入</h2><p id="minimax-status" role="status">正在读取…</p></div><button type="button" data-close aria-label="关闭 MiniMax 接入">×</button></header>
+    <div class="minimax-model"><span>支持模型</span><strong>HORIZON-MiniMax</strong></div>
+    <p class="minimax-note">请使用公司网关的接口地址及对应 API Key。</p>
     <label>接口地址<input name="endpoint" type="url" required autocomplete="off" spellcheck="false" placeholder="https://你的网关/v1/chat/completions"></label>
     <label>API Key<input name="api_key" type="password" autocomplete="new-password" maxlength="8192" spellcheck="false" placeholder="填写自己的 API Key"></label>
     <p class="minimax-note" id="minimax-key-note">密钥仅保存到本机，不会随项目上传。</p>
-    <div class="minimax-model"><span>审核模型</span><strong>HORIZON-MiniMax</strong></div>
-    <p class="minimax-note">使用支持图像输入的公司 MiniMax 接口。开始分析时会发送采样画面及所选反馈，并使用你的 API 额度。</p>
+    <p class="minimax-note">开始分析时会发送采样画面及所选反馈，并使用你的 API 额度。</p>
     <p class="minimax-error" role="alert"></p>
     <footer><button type="button" data-disconnect>断开接入</button><button type="submit" class="primary">保存接入</button></footer>
   </form>`;
