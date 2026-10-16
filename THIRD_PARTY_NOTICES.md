@@ -1,6 +1,6 @@
 # Third-party notices
 
-The supplied base viewer still needs source and redistribution authorization verification. The exact 16 inherited/modified files are listed in [the inventory](docs/licensing/base-viewer-files.json); see [LICENSE_STATUS.md](LICENSE_STATUS.md). This notice does not apply a new license to those files.
+Base viewer licensing is documented in [LICENSE_STATUS.md](LICENSE_STATUS.md), with inherited and modified files listed in the [inventory](docs/licensing/base-viewer-files.json).
 
 ## Bundled components
 
@@ -13,14 +13,12 @@ The supplied base viewer still needs source and redistribution authorization ver
 | trajlens | [Kunal-Somani/trajlens](https://github.com/Kunal-Somani/trajlens); fixed-spacing and integrity-check ideas adapted in `quality_evidence.py` | [Apache-2.0](static/licenses/trajlens.txt) |
 | Font Awesome Free 6.7.2 | [Font Awesome](https://fontawesome.com/), Fonticons, Inc.; selected unchanged SVG paths in `static/icons.svg` | [CC BY 4.0 icon attribution and license notice](static/licenses/fontawesome.txt) |
 
-The 35 original robot mesh files match the upstream Git blobs recorded in [robot/SOURCE.json](robot/SOURCE.json). The URDF differs at the fixed `mid360_joint` origin, as documented there. That supplied adjustment is retained, not presented as an unmodified upstream file. Generated preview meshes are derived from these assets; the same robot license is retained.
-
-The current linear UI icons (`static/workspace-icons.svg`) and project mark are drawn for this project.
+Robot mesh sources and hashes are recorded in [robot/SOURCE.json](robot/SOURCE.json), along with the modified `mid360_joint` origin in the URDF. Derived preview meshes retain the robot asset license.
 
 ## Optional model dependencies
 
-The public DINOv2-S/14 downloader uses Meta's official [facebook/dinov2-small](https://huggingface.co/facebook/dinov2-small) at revision `ed25f3a31f01632728cabb09d1542f84ab7b0056`. The model card identifies Apache-2.0; its [license](static/licenses/dinov2.txt) is preserved. The matching backbone is supplied in the separate Release model pack with its license; the source Git repository does not contain weight binaries. Downloads record SHA-256 provenance.
+The DINOv2-S/14 downloader uses Meta's [facebook/dinov2-small](https://huggingface.co/facebook/dinov2-small) at revision `ed25f3a31f01632728cabb09d1542f84ab7b0056` under [Apache-2.0](static/licenses/dinov2.txt). The separate model pack includes the backbone, license and SHA-256 provenance. The DINOv2 adaptation uses separately trained temporal weights.
 
-The original WARP-RM configuration uses DINOv3, whose weights have separate access and license terms. No DINOv3 weights or access credentials are distributed. The DINOv2 method adaptation uses separately trained temporal weights; a DINOv3-trained head is not used with DINOv2 features.
+DINOv3 weights require separate access and license terms and are not bundled.
 
-Python dependencies are installed from the requirements files and retain their upstream licenses. Development recordings, labels and feature caches are not distributed. Optional checkpoint metadata is retained for compatible playback tools; MiniMax review does not require local model weights.
+Python dependencies retain their upstream licenses. Local model weights are optional for MiniMax review.

@@ -1,6 +1,8 @@
 # Development
 
-Use Python 3.10+, FFmpeg and Node.js 20+.
+## Tests
+
+Requires Python 3.10+, FFmpeg and Node.js 20+.
 
 ```bash
 python3 -m venv .venv
@@ -9,12 +11,32 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest tests -q
 node --test tests/*.test.mjs
 ```
 
-Optional model-runtime tests require PyTorch. Tests that depend on unavailable recordings or optional dependencies are explicitly skipped. Synthetic fixtures must remain clearly labelled and must not be saved as production review results.
+Optional model tests require PyTorch. Tests requiring unavailable recordings or dependencies are skipped. API tests use temporary workspaces and fake credentials.
 
-Use `scripts/create_demo.py` to generate a synthetic MCAP for playback checks. API tests use temporary workspaces and fake credentials; they do not call a paid model service.
+`scripts/create_demo.py` generates a synthetic MCAP for playback checks.
 
-Keep recordings read-only and human review saves explicit. Preserve time precision, source provenance and missing-data masks. Test credential redaction, interrupted jobs and cache invalidation when changing the review pipeline. Describe behavior and verification in pull requests.
+## UI
 
-The UI uses one font family throughout. Page titles are 24 px, dialog and stage titles 18 px, body and section text 14 px, controls 13 px and annotations 12 px. Use tabular digits for times; reserve monospace for raw structured data. Playback and review panels share a timeline.
+Use one font family and a shared playback timeline.
 
-Do not commit credentials, recordings, private screenshots, databases, generated caches or experiment outputs. See [license status](LICENSE_STATUS.md) and [source packaging](docs/SOURCE_PACKAGE.md).
+| Text | Size |
+| --- | --- |
+| Page titles | 24 px |
+| Dialog and stage titles | 18 px |
+| Body and section text | 14 px |
+| Controls | 13 px |
+| Annotations | 12 px |
+
+Use tabular digits for time and monospace for structured data.
+
+## File-based gateway configuration
+
+Without a personal connection file, the service reads `ROBOCURATE_VLM_CONFIG` or `workspace/taskflow/company-vlm.json`. Use model `HORIZON-MiniMax` and provide credentials through `api_key_file` or `api_key_env`.
+
+Personal settings take precedence. Disconnecting retains a disabled marker that prevents fallback to the file-based configuration.
+
+## Data handling
+
+Keep recordings read-only, human corrections separate from model output, and source timestamps and missing-data masks intact. Pipeline changes should cover credential redaction, interrupted jobs and cache invalidation.
+
+Keep credentials, recordings and generated workspace files outside version control. See [security](SECURITY.md), [source packaging](docs/SOURCE_PACKAGE.md) and [license status](LICENSE_STATUS.md).

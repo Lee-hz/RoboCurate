@@ -1,9 +1,15 @@
 # Local deployment
 
-RoboCurate listens on `127.0.0.1` and reads paths selected by the local operator. It does not provide multi-user authentication or authorization. Run a separate local instance for each operator.
+Run one local instance per operator. RoboCurate listens on `127.0.0.1` and uses local filesystem access; it has no multi-user authentication.
 
-MiniMax credentials are stored in an owner-only file under `workspace/taskflow/`. The settings API does not return keys, and the browser does not persist them. Protect workstation access and workspace backups. Disconnecting disables further submissions; an in-flight request must finish before credentials can be changed.
+## Credentials
 
-Model requests send sampled images and selected feedback to the configured gateway. Use an endpoint authorized for the recording data. Never include credentials or private recordings in issues, logs shared externally, or source packages.
+API keys are saved in `workspace/taskflow/minimax-local.json` with owner-only permissions (`0600`). The browser neither stores nor receives saved keys. Protect workspace backups and keep credentials out of shared logs and source packages.
 
-Only load trusted model checkpoints. Treat imported video, model responses and template text as untrusted data.
+Disconnecting disables submissions. Running tasks must finish before connection settings can change.
+
+## Data
+
+Analysis sends sampled images and selected feedback summaries to the configured gateway. Use an endpoint approved for the recordings.
+
+Load model checkpoints from trusted sources. Validate imported media, model responses and template text before use.
