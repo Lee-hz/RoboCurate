@@ -354,3 +354,36 @@ def test_model_inputs_distinguish_visual_missing_and_unreadable_archives(flow):
     out=flow.model_inputs(run['id'])
     assert out['available'] and out['unreadable']==2
     assert out['requests'][0]['state'] is None and out['requests'][0]['cached']
+
+
+def test_feedback_prepares_fresh_record_before_loading_state(flow,monkeypatch):
+    events=[]
+    job=flow.put('jobs',dict(state='running',cancel_requested=False))
+    flow.library.prepare=lambda ep:events.append(('prepare',ep)) or dict(state='building',message='读取中')
+    flow.library.state=lambda ep:events.append(('ready',ep)) or dict(state='ready')
+    monkeypatch.setattr('taskflow.service.time.sleep',lambda _:None)
+    flow._prepare_feedback(job['id'],dict(source=dict(kind='recording',id='fresh')))
+    assert events==[('prepare','fresh'),('ready','fresh')]
+    assert flow.get('jobs',job['id'])['progress']==6
+
+
+def test_feedback_parse_failure_stops_analysis(flow):
+    job=flow.put('jobs',dict(state='running',cancel_requested=False))
+    flow.library.prepare=lambda ep:dict(state='error',message='损坏的MCAP')
+    with pytest.raises(ValueError,match='机器人反馈解析失败'):
+        flow._prepare_feedback(job['id'],dict(source=dict(kind='recording',id='broken')))
+
+
+def test_feedback_preparation_can_be_cancelled(flow,monkeypatch):
+    from taskflow.service import Cancelled
+    job=flow.put('jobs',dict(state='running',cancel_requested=False))
+    flow.library.prepare=lambda ep:dict(state='building')
+    flow.library.state=lambda ep:dict(state='building')
+    monkeypatch.setattr('taskflow.service.time.sleep',lambda _:flow.cancel(job['id']))
+    with pytest.raises(Cancelled):
+        flow._prepare_feedback(job['id'],dict(source=dict(kind='recording',id='fresh')))
+
+
+def test_video_and_snapshot_do_not_require_native_cache(flow):
+    for source in [dict(kind='video'),dict(kind='recording',snapshot=True)]:
+        flow._prepare_feedback('unused',dict(source=source))

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sqlite3
 import threading
+import time
 import uuid
 
 from storage import Conflict, now
@@ -349,10 +350,26 @@ class TaskflowService:
             if len(chosen)>=8:break
         return chosen
 
+    def _prepare_feedback(self,id,asset):
+        source=asset['source']
+        if source['kind']!='recording' or source.get('snapshot'):return
+        self.progress(id,4,'解析原始关节与手部反馈')
+        state=self.library.prepare(source['id'])
+        deadline=time.monotonic()+600
+        while state['state']=='building':
+            self.progress(id,4,'解析机器人反馈：'+state.get('message',''))
+            if time.monotonic()>=deadline:raise ValueError('机器人反馈解析超时，请稍后重试。')
+            time.sleep(.25)
+            state=self.library.state(source['id'])
+        if state['state']!='ready':
+            raise ValueError('机器人反馈解析失败：'+state.get('message','请检查原始记录'))
+        self.progress(id,6,'机器人反馈已就绪，读取实际画面')
+
     def _run(self,id,asset,template):
         try:
             job=self.get('jobs',id);self.progress(id,3,'读取范本或待审录像的实际画面')
             self.media.unchanged(asset)
+            if job.get('analysis_mode','visual')=='state':self._prepare_feedback(id,asset)
             evidence=StateEvidence(self.library,asset) if job.get('analysis_mode','visual')=='state' else None
             scope=job.get('analysis_range',dict(start_s=0.,end_s=asset['duration_s']));start,end=scope['start_s'],scope['end_s']
             frames,sampling=self.media.sample_guided(asset,evidence,start,end,budget=16) if evidence else self.media.sample(asset,start,end,budget=16,fps=1.)

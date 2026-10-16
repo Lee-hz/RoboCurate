@@ -19,7 +19,7 @@ Open http://127.0.0.1:8421/. The launcher creates a Python environment and insta
 ## Workflow
 
 1. Open **MiniMax 接入** and save your endpoint and API key.
-2. Select a reference recording and parse its task stages and completion criteria. Inspect and edit the proposed definitions.
+2. Open **任务范本**. In **导入数据**, select a recording and click **加入审核数据** (or upload a video). Then select it under **范本录像**, parse its stages and completion criteria, and inspect the proposed definitions.
 3. Open another recording, choose the template and review range, and start analysis.
 4. Inspect each attempt with timestamped evidence, actual model inputs, video, 3D playback and joint feedback.
 5. Save human corrections and export review JSON as needed.
