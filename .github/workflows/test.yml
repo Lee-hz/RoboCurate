@@ -21,6 +21,8 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Install video tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest tests -q -rs
         env:
@@ -35,6 +37,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+      - name: Install video tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
       - run: python -m pytest tests -q -rs

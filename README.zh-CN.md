@@ -31,6 +31,12 @@
 
 需要 Python 3.10+ 和浏览器，当前实测平台为 Linux，无需安装 ROS。
 
+上传视频、抽帧和范本视频测试还需要 FFmpeg（含 ffprobe）。Ubuntu / Debian 安装：
+
+```bash
+sudo apt-get update && sudo apt-get install -y ffmpeg
+```
+
 ```bash
 ./start.sh /你的录制目录
 ```

@@ -33,6 +33,12 @@ Credentials are stored only in `workspace/taskflow/minimax-local.json`, with own
 
 Requirements: Python 3.10+, a browser, and Python virtual-environment support. Linux is the platform tested in development. ROS itself is not required.
 
+Video upload, frame extraction and video workflow tests also require FFmpeg (including ffprobe). On Ubuntu / Debian:
+
+```bash
+sudo apt-get update && sudo apt-get install -y ffmpeg
+```
+
 From the extracted source directory:
 
 ```bash
