@@ -1,7 +1,9 @@
-# Local deployment scope
+# Local deployment
 
-RoboCurate reads files chosen by the local operator and serves a browser UI on `127.0.0.1`. It does not implement multi-user authentication, authorization or internet-facing deployment. Do not expose the service port to an untrusted network.
+RoboCurate listens on `127.0.0.1` and reads paths selected by the local operator. It does not provide multi-user authentication or authorization. Run a separate local instance for each operator.
 
-Use only model checkpoints from a trusted source. Checkpoint loading and scripts are executable software dependencies. Do not include access tokens or raw recordings in issue reports.
+MiniMax credentials are stored in an owner-only file under `workspace/taskflow/`. The settings API does not return keys, and the browser does not persist them. Protect workstation access and workspace backups. Disconnecting disables further submissions; an in-flight request must finish before credentials can be changed.
 
-No public security contact is configured while repository ownership and source licensing are pending. A maintainer should configure a private reporting channel before public release.
+Model requests send sampled images and selected feedback to the configured gateway. Use an endpoint authorized for the recording data. Never include credentials or private recordings in issues, logs shared externally, or source packages.
+
+Only load trusted model checkpoints. Treat imported video, model responses and template text as untrusted data.

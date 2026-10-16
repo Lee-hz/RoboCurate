@@ -9,25 +9,22 @@ import shutil
 import zipfile
 
 APP=Path(__file__).resolve().parents[1]
-ROOT_FILES=['.gitignore','README.md','README.zh-CN.md','CONTRIBUTING.md','SECURITY.md',
-    'CHANGELOG.md','CONTRIBUTORS.md','LICENSE_STATUS.md','THIRD_PARTY_NOTICES.md','OPEN_SOURCE_READINESS.md',
-    'INTERACTION_UPGRADE.md','RELEASE_STATUS.json','start.sh','pytest.ini']
-PATTERNS=['*.py','requirements*.txt','scripts/*.py','scripts/*.sh','tests/test_*.py',
-    'tests/*.test.mjs','tests/warp_fixtures.py','tests/check_demo_ui.py','tests/check_progress_live.py',
-    'static/*.js','static/*.mjs','static/*.svg','static/index.html',
-    'static/*.css','static/licenses/*.txt',
+ROOT_FILES=['.gitignore','README.md','README.zh-CN.md','CONTRIBUTING.md','CONTRIBUTORS.md',
+    'SECURITY.md','LICENSE_STATUS.md','THIRD_PARTY_NOTICES.md','start.sh','pytest.ini',
+    'requirements.txt','requirements-dev.txt','requirements-warp.txt',
+    'docs/TASKFLOW.md','docs/SOURCE_PACKAGE.md',
+    'scripts/__init__.py','scripts/build_source_candidate.py','scripts/build_preview_meshes.py',
+    'scripts/create_demo.py','scripts/evaluate_taskflow.py','scripts/install_models.py','scripts/verify_models.py']
+PATTERNS=['*.py','tests/test_*.py','tests/*.test.mjs','tests/warp_fixtures.py',
+    'static/*.js','static/*.mjs','static/*.svg','static/index.html','static/*.css','static/licenses/*.txt',
     'static/viewer/*.js','static/viewer/*.mjs','static/viewer/*.html','static/viewer/*.css',
     'static/viewer/g1-preview.json','static/viewer/vendor/*.js',
-    'robot/*.urdf','robot/SOURCE.json','robot/meshes/*.STL','warp_progress/*.py','taskflow/*.py','curation/*.py',
+    'robot/*.urdf','robot/SOURCE.json','robot/meshes/*.STL',
+    'warp_progress/*.py','taskflow/*.py','curation/*.py',
     'vendor/*.py','vendor/warp_rm/*.py','vendor/warp_rm/LICENSE','vendor/warp_rm/provenance.json',
-    'docs/*.md','docs/references/*.md','docs/references/*.json','docs/licensing/*.json','docs/licensing/*.txt',
-    'docs/images/synthetic-demo.png','docs/images/task-workspace.png',
-    'docs/images/task-cameras.png','docs/images/motion-quality.png','.github/workflows/*.yml',
-    'experiments/quality_validation/*.json','experiments/quality_validation/*.py',
-    'tests/check_*.py','STAGE_MODEL*.md','WARP_IMPLEMENTATION.md','VISUAL_MODEL_UPDATE.md','DATA_GRADING.md',
-    'models/*.json','research/README.md','research/SOURCE_INDEX.json','research/*/*.py','research/*/*.md',
-    'research/*/protocol*.json','research/*/freeze.json','research/*/task_contract.json',
-    'research/*/promotion_protocol.json']
+    'docs/licensing/*.json','.github/workflows/*.yml','models/*.json']
+EXCLUDED={'static/holocurate.css','static/shell.css','static/studio.css','static/ui-system.css',
+    'static/workflow.css','static/task-audit.js','static/task-audit.css'}
 FORBIDDEN_SUFFIXES={'.mcap','.npz','.pt','.pth','.safetensors','.sqlite','.sqlite3','.zip','.pyc','.key','.pem'}
 SECRET_PATTERNS=[rb'hf_[A-Za-z0-9]{25,}',rb'gh[pousr]_[A-Za-z0-9]{30,}',
     rb'github_pat_[A-Za-z0-9_]{30,}',rb'-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----']
@@ -38,6 +35,7 @@ def selected_files():
     for pattern in PATTERNS:files.update(APP.glob(pattern))
     for path in sorted(files):
         relative=path.relative_to(APP)
+        if relative.as_posix() in EXCLUDED:continue
         if not path.is_file() or path.is_symlink() or not path.resolve().is_relative_to(APP):
             raise ValueError(f'Not an ordinary source file: {relative}')
         if path.suffix.lower() in FORBIDDEN_SUFFIXES or any(part in ('.git','.venv','workspace','__pycache__') for part in relative.parts):
@@ -50,7 +48,7 @@ def selected_files():
 
 def build(output,label):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*',label):raise ValueError('Use a simple release label without path separators')
-    status=json.loads((APP/'RELEASE_STATUS.json').read_text())
+    status=dict(publication_ready=False,open_source_license_ready=False,release=label,github_target='Lee-hz/RoboCurate')
     rows=list(selected_files())
     folder=output.resolve()/f'RoboCurate-{label}-source'
     folder.mkdir(parents=True,exist_ok=False)

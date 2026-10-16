@@ -9,11 +9,6 @@ from warp_progress.stages_v4 import RefinedStageNet,inference_v4,load_stage_v4,c
 from test_core import real_library
 
 
-def study_module():
-    path=Path(__file__).resolve().parents[1]/'research/stage_v4_20260917/train.py'
-    if not path.is_file():pytest.skip('stage-training source is missing')
-    spec=importlib.util.spec_from_file_location('v4_study_test',path);mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
-    return mod
 
 
 def test_shared_initialization_and_default_forward_preserve_v3():
@@ -69,23 +64,8 @@ def test_contrastive_pairs_and_interval_loss_semantics():
     assert segment_cdf_loss(torch.tensor([.1,.1,.1,.1,.1,.9]))>0
 
 
-def test_brackets_are_uncertain_no_extrapolation_or_missing_gap_crossing():
-    module=study_module();y=np.array([-1,0,0,0,0,-1,-1,1,1,1,1,-1])
-    row=dict(y=y,camera_valid=np.ones((12,2),bool),state_valid=np.ones(12,bool))
-    bags,stable,segments=module.supervision_regions(row)
-    assert len(bags)==1 and bags[0].tolist()==[5,6,7]
-    assert not any(i in stable for i in [0,1,5,6,7,11])
-    assert [x.tolist() for x,_ in segments]==[[2,3],[8,9]]
-    row['state_valid'][6]=False
-    assert not module.supervision_regions(row)[0]
 
 
-def test_bracket_diagnostic_matches_direction_and_counts_extra_changes():
-    module=study_module();row=dict(points_ix=np.array([0,3,6]),points_y=np.array([0,1,2]),camera_valid=np.ones((7,2),bool),state_valid=np.ones(7,bool))
-    out=dict(stage=np.array([0,0,1,1,1,2,2]),valid=np.ones(7,bool))
-    assert module.bracket_metrics(row,out)==dict(brackets=2,matched=2,extra_switches=0)
-    out['stage']=np.array([0,1,0,1,1,2,2])
-    assert module.bracket_metrics(row,out)==dict(brackets=2,matched=2,extra_switches=2)
 
 
 def test_v4_service_identity_includes_native_state_without_torch_server_dependency(real_library):

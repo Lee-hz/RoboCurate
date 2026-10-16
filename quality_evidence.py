@@ -1,6 +1,6 @@
 """Source-traceable evidence adapted from HFlow and trajlens (Apache-2.0).
 
-See docs/quality_sources.md and static/licenses/{hflow,trajlens}.txt.
+See THIRD_PARTY_NOTICES.md and static/licenses/{hflow,trajlens}.txt.
 Modifications: scan the whole timeline, distinguish raw capture from fixed-rate
 export, mask bad/gapped motion steps instead of reconnecting them, and report
 unmeasured checks as unknown. Motion facts never classify task success.

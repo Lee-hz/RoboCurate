@@ -1,112 +1,39 @@
 # RoboCurate
 
-**Reference-driven review:** connect a company vision-language service to infer task stages and observable goals from a reference demo, then review each attempt with timestamped evidence and separate human corrections. See [workflow setup and limits](docs/TASKFLOW.md).
+A local VLM review workbench for robot teleoperation recordings. Define task stages and completion criteria from a reference demonstration, review individual attempts, and inspect synchronized video, 3D poses, joint feedback and human corrections.
 
-A local workbench for robot demonstrations: synchronized cameras and motion, VLM stage and goal evidence, and traceable human decisions.
+[Download source](https://github.com/Lee-hz/RoboCurate/archive/refs/heads/main.zip) · [中文说明](README.zh-CN.md)
 
-[中文说明](README.zh-CN.md) · [Models](docs/MODELS.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+## Run
 
-**Source preview.** This repository provides source code and a synthetic demo. The supplied base-viewer's license is still under review; no repository-wide open-source license has been applied. See [license status and the exact file list](LICENSE_STATUS.md).
-
-## Download
-
-- Historical release (before this VLM update): [Download the v0.1.0-preview.3 source package](https://github.com/Lee-hz/RoboCurate/releases/download/v0.1.0-preview.3/RoboCurate-v0.1.0-preview.3-source.zip), or open [Releases](https://github.com/Lee-hz/RoboCurate/releases) and select the ZIP under **Assets**.
-- For the latest source, choose **Code → Download ZIP** on the repository page, or [download main](https://github.com/Lee-hz/RoboCurate/archive/refs/heads/main.zip).
-
-Extract the ZIP and follow the instructions below. This is a source distribution for local setup, not a standalone installer. Recordings are excluded. Trained weights are available in a separate [model pack](https://github.com/Lee-hz/RoboCurate/releases/download/v0.1.0-preview.3/RoboCurate-v0.1.0-preview.3-models.zip); the installer below works with **Code → Download ZIP** too.
-
-## Current workflow
-
-1. Open **MiniMax 接入** in the top bar. Enter your own image-capable company gateway endpoint and API key, then save.
-2. Add local MCAP recordings or upload a reference video.
-3. Parse the reference into stage definitions and observable completion criteria; inspect and edit the proposal.
-4. Open another recording, select the template, and start MiniMax review.
-5. Review individual attempts with synchronized video, 3D motion, joint feedback, model-input evidence and human corrections.
-
-The current product focuses on VLM task review. Historical technical scores are not acceptance criteria. Generated templates are editable proposals; a separate approval/activation state is not yet implemented.
-
-Each person runs a local instance and uses their own API quota. The connection form uses **HORIZON-MiniMax**, an image-capable company Chat Completions model, with no OG fallback. This is not a universal alias for arbitrary MiniMax public API models. Save does not call the model; connection success is reported after a successful task request.
-
-Credentials are stored only in `workspace/taskflow/minimax-local.json`, with owner-only file permissions. They are never returned by the settings API or stored in browser storage, and are excluded from source packages. This is a local API connection, not a website account or multi-user login system. See [setup and limits](docs/TASKFLOW.md).
-
-## Run locally
-
-Requirements: Python 3.10+, a browser, and Python virtual-environment support. Linux is the platform tested in development. ROS itself is not required.
-
-Video upload, frame extraction and video workflow tests also require FFmpeg (including ffprobe). On Ubuntu / Debian:
+Requires Python 3.10+, FFmpeg and a browser. Tested on Linux; ROS is not required.
 
 ```bash
-sudo apt-get update && sudo apt-get install -y ffmpeg
-```
-
-From the extracted source directory:
-
-```bash
+sudo apt-get update
+sudo apt-get install -y python3-venv ffmpeg
 ./start.sh
 ```
 
-The script creates `.venv` and installs application dependencies on first run. Open **http://127.0.0.1:8421/** and add a recording directory. Alternatively:
+Open http://127.0.0.1:8421/. The launcher creates a Python environment and installs dependencies on first use. To select a recording directory at startup, run `./start.sh /path/to/recordings`.
 
-```bash
-./start.sh /path/to/recordings
-```
+## Workflow
 
-The server binds to loopback. It is intended for a local operator, not a public multi-user service. Recordings are read-only; caches, reviews and exports are stored in `workspace/`.
+1. Open **MiniMax 接入** and save your endpoint and API key.
+2. Select a reference recording and parse its task stages and completion criteria. Inspect and edit the proposed definitions.
+3. Open another recording, choose the template and review range, and start analysis.
+4. Inspect each attempt with timestamped evidence, actual model inputs, video, 3D playback and joint feedback.
+5. Save human corrections and export review JSON as needed.
 
-## Historical stage models (optional; not needed for MiniMax review)
+The supported gateway model is **HORIZON-MiniMax**, with multi-image Chat Completions support. Configuration alone does not call the model. Analysis uses the operator's own API quota.
 
-Run from the extracted source directory (about 94 MB of model assets; no account required):
+Each operator runs their own local instance. Keys are stored in `workspace/taskflow/minimax-local.json` with owner-only permissions and are never returned to the browser. Recordings remain read-only. Reviews, caches and exports are stored in `workspace/`; credentials, recordings and model weights are excluded from the source repository.
 
-```bash
-python3 -m venv workspace/warp-env
-workspace/warp-env/bin/python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-workspace/warp-env/bin/python -m pip install -r requirements-warp.txt
-python3 scripts/install_models.py
-workspace/warp-env/bin/python scripts/verify_models.py
-```
+## Scope
 
-The pack contains the pinned DINOv2-S/14 backbone, G1 stage v1/v2/v3 and the public-video WARP temporal head. Select **g1-stage-v3** for the banana-transfer task. [Offline installation](docs/MODELS.md) and [all training/research code](docs/TRAINING.md) are documented. Raw training videos and annotations are not distributed.
+G1 MCAP can provide camera and robot-state evidence; ordinary video provides visual evidence only. Stages may repeat or move backwards. Outcomes are completed, not completed or uncertain. Model output requires evidence review; joint motion alone cannot establish object grasp or placement. Precise spatial measurements and independently validated task accuracy are not provided. Templates are editable proposals without a separate approval state.
 
-## Synthetic demo
+## Development and licensing
 
-No laboratory recording or model download is required:
+[Workflow details](docs/TASKFLOW.md) · [Development](CONTRIBUTING.md) · [Packaging](docs/SOURCE_PACKAGE.md) · [Security](SECURITY.md) · [Contributors](CONTRIBUTORS.md)
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python scripts/create_demo.py
-./start.sh workspace/demo --workspace workspace/demo-session --analyze
-```
-
-The six-second MCAP contains generated camera diagrams, 41-dimensional state/action data, a controlled arm offset and a deliberate head-camera gap. Every image is labelled **SYNTHETIC DEMO**. It exercises playback, technical checks, review and export; it is not a visual-model benchmark and has no success label.
-
-<details>
-<summary>View the synthetic sample used for trying the interface without recordings</summary>
-
-![Synthetic MCAP sample with generated diagrams](docs/images/synthetic-demo.png)
-
-</details>
-
-Task-stage and WARP inference require appropriate checkpoints in a separate model environment. The source includes model and training implementations; the Release model pack supplies the matching pretrained encoder and trained heads. Private recordings are excluded. See [model setup](docs/MODELS.md).
-
-## Scores and exports
-
-`quality.rating.max_score` is `10`, and rating schema version is `3`. The previous 100-point score is divided by ten: `92.3 → 9.23`. Dimensions, weighted contributions, the catalog and new exports use the same scale. Coverage and model probabilities remain percentages; WARP retains its relative-speed unit.
-
-Exports retain `robot-data-studio.v1` for reader compatibility. Training bundles contain 41-dimensional state/action arrays, JPEG images, timestamps and validity masks. This is a generic format, not native LeRobot/RLDS or an RGB-D conversion. `dataset_reader.py` provides a reader.
-
-## Development
-
-```bash
-.venv/bin/python -m pip install -r requirements-dev.txt
-PYTHONPATH=. .venv/bin/python -m pytest tests/test_demo.py tests/test_scoring.py tests/test_grading.py -q
-node --test tests/*.test.mjs
-```
-
-Synthetic end-to-end tests generate MCAP, inspect known faults and export a reviewed clip. Full model tests require model dependencies. Historical integration tests are explicitly skipped when the private development recordings are absent; skips are not evidence of real-data evaluation.
-
-See [contributing](CONTRIBUTING.md), [changes](CHANGELOG.md), [validation scope](docs/VALIDATION.md), [source packaging](docs/SOURCE_PACKAGE.md), [publication status](RELEASE_STATUS.json), and [security scope](SECURITY.md). Raw recordings, review databases, browser profiles, login caches and model weights do not belong in the source repository.
-
-## Contributors
-
-See [CONTRIBUTORS.md](CONTRIBUTORS.md).
+Redistribution permission for the supplied base viewer remains unverified. No repository-wide open-source license has been applied. See [license status](LICENSE_STATUS.md) and [third-party notices](THIRD_PARTY_NOTICES.md).

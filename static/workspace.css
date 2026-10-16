@@ -1,5 +1,4 @@
-/* RoboCurate workspace, September 2026. One active style system.
-   Visualization-first hierarchy inspired by Munari's public demonstration. */
+/* Shared workspace layout and theme tokens. */
 :root {
   --font-ui: -apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans CJK SC","Microsoft YaHei",sans-serif;
   --font-mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;

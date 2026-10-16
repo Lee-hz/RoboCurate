@@ -1416,36 +1416,14 @@ async function loadExports() {
 }
 function renderGuide() {
   page = "guide";
-  $("#main").innerHTML =
-    `<div class="page-head"><div><h1>从采集记录到训练数据</h1><p>第一次使用，按这五步完成一轮筛选。</p></div></div><section class="panel guide">${[
-      [
-        "认识这批数据",
-        "样例包含G1身体关节、双手、三路RGB相机和遥操作参考。导出前依次检查采集标记、人工审核与片段质量。",
-      ],
-      [
-        "查看任务与技术质检",
-        "进入记录后，相机、3D 和联看共用播放器与时间轴。右侧“完成条件、人工复核”核对 VLM 的目标判断和每次尝试。点击“MiniMax 审核”选择范本并提交。数据工作台按已分析阶段的未完成尝试、证据不足和人工保留结论筛选；局部结果不代表整条任务已审核。",
-      ],
-      [
-        "同步回放并保留片段",
-        "用时间轴回放头部和左右腕图像。在“质检”定位采样中断、无效数值、关节偏差等异常；“更多”中可查看关节曲线和原始通道。上方可切换联看、3D 轨迹或相机。任务片段的“回看”会播放前后上下文；“填入审核范围”仅填写草稿。也可用 [ / ] 设置起止时刻，点击“加入”保留片段，再到“审核”保存。片段至少 0.1 秒且不能重叠。",
-      ],
-      [
-        "填写任务指令，确认审核结论",
-        "打开右侧“审核”标签。任务指令应描述具体移动与操作目标，不要使用泛化的系统验证说明。选择通过、处理后保留、待复核或排除，记录问题标签和备注后保存。变更记录可在审核历史中查看；未保存草稿只留在当前浏览器。左上角可收起或展开侧栏，所有页面保持该选择；右上角可切换明暗主题。问题支持技术优先排序、连续判断和当前筛选的批量判断，已有结论不会被批量覆盖。",
-      ],
-      [
-        "导出并接入训练",
-        "筛选清单适合整理和转交。通用训练包需要先完成通过或处理后保留的审核结论与深度质检，包含 samples.npz、图像、images.jsonl 和 manifest.json。状态 41 维 = 身体 29 + 左手 6 + 右手 6；动作同维度。使用 valid 掩码筛除无效样本；序列训练必须按连续有效区间采样。头部双目图像保留原始拼接，缩放、裁剪和归一化按目标模型进行。",
-      ],
-    ]
-      .map(
-        ([h, p], i) =>
-          `<div class="guide-step"><span class="guide-number">${i + 1}</span><div><h2>${h}</h2><p>${p}</p></div></div>`,
-      )
-      .join(
-        "",
-      )}<div class="padded hint">工作空间：${escape(catalog.workspace)}<br>审核数据库：reviews.sqlite3 · 派生缓存：cache/ · 导出：exports/<br>备份审核结果时可导出筛选清单；完整工作空间备份请先停止服务，再复制目录。<br>公开参考：<a class="subtle-link" href="https://github.com/huggingface/lerobot" target="_blank" rel="noreferrer">LeRobot ↗</a> · <a class="subtle-link" href="https://github.com/ARISE-Initiative/robomimic" target="_blank" rel="noreferrer">robomimic ↗</a></div></section>`;
+  const steps=[
+    ['接入 MiniMax','点击右上角 MiniMax 接入，填写自己的接口地址和 API Key。密钥保存在本机；开始分析后使用该 API 的额度。'],
+    ['建立任务范本','添加采集记录或上传录像，打开任务范本并解析阶段与完成条件。查看模型给出的定义，按实际任务要求修订。'],
+    ['选择数据并分析','打开待审记录，选择范本、分析方式和检查范围，开始自动审核。阶段支持重复尝试与回退。失败后可恢复原配置重试。'],
+    ['同步核对证据','通过时间轴联动录像、3D 和关节反馈。在完成条件中核对判断，在模型输入中查看实际发送的画面与反馈摘要。'],
+    ['保存人工复核','对照原始证据修订阶段判断并保存。模型结果与人工修订分别保留，可导出审核 JSON。局部分析仅代表所选区间。']
+  ];
+  $("#main").innerHTML=`<div class="page-head"><h1>使用指南</h1></div><section class="panel guide">${steps.map(([title,body],i)=>`<div class="guide-step"><span class="guide-number">${i+1}</span><div><h2>${title}</h2><p>${body}</p></div></div>`).join('')}</section>`;
 }
 
 function selectCandidateRows(priorityOnly){

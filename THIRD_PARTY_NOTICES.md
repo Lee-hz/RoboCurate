@@ -15,7 +15,7 @@ The supplied base viewer still needs source and redistribution authorization ver
 
 The 35 original robot mesh files match the upstream Git blobs recorded in [robot/SOURCE.json](robot/SOURCE.json). The URDF differs at the fixed `mid360_joint` origin, as documented there. That supplied adjustment is retained, not presented as an unmodified upstream file. Generated preview meshes are derived from these assets; the same robot license is retained.
 
-The current linear UI icons (`static/workspace-icons.svg`) and project mark are drawn for this project. UI research screenshots and recordings from other products are not included in the source candidate.
+The current linear UI icons (`static/workspace-icons.svg`) and project mark are drawn for this project.
 
 ## Optional model dependencies
 
@@ -23,4 +23,4 @@ The public DINOv2-S/14 downloader uses Meta's official [facebook/dinov2-small](h
 
 The original WARP-RM configuration uses DINOv3, whose weights have separate access and license terms. No DINOv3 weights or access credentials are distributed. The DINOv2 method adaptation uses separately trained temporal weights; a DINOv3-trained head is not used with DINOv2 features.
 
-Python dependencies are installed from the requirements files and retain their upstream licenses. Development recordings, labels and feature caches are not distributed. Project training source is included; project-trained heads are supplied in the model pack under the same source-preview publication status, without inventing a new repository-wide license. [Model scope and setup](docs/MODELS.md) explains which workflows are available without weights.
+Python dependencies are installed from the requirements files and retain their upstream licenses. Development recordings, labels and feature caches are not distributed. Optional checkpoint metadata is retained for compatible playback tools; MiniMax review does not require local model weights.

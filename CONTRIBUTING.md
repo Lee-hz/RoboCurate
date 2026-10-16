@@ -1,9 +1,20 @@
-# Contributing
+# Development
 
-Public contribution and publication begin after the items in `LICENSE_STATUS.md` are resolved.
+Use Python 3.10+, FFmpeg and Node.js 20+.
 
-Use Python 3.10+, the application dependencies and pytest. Model work additionally uses a separate environment from `requirements-warp.txt` and a suitable PyTorch installation. Frontend helpers use native ES modules; `node --test tests/*.test.mjs` needs no package download.
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest tests -q
+node --test tests/*.test.mjs
+```
 
-Use `scripts/create_demo.py` or synthetic pytest fixtures for reproducible tests. Do not commit recordings, personal information, screenshots of private collections, credentials, generated caches or databases. Describe the data source and task scope when reporting model results; stage accuracy is not final-success accuracy or training benefit.
+Optional model-runtime tests require PyTorch. Tests that depend on unavailable recordings or optional dependencies are explicitly skipped. Synthetic fixtures must remain clearly labelled and must not be saved as production review results.
 
-For a change, explain the affected behavior and verification. Keep raw sources read-only, preserve nanosecond precision, avoid future-frame/action leakage, and keep human review saves explicit. API changes should include schema and reader compatibility notes.
+Use `scripts/create_demo.py` to generate a synthetic MCAP for playback checks. API tests use temporary workspaces and fake credentials; they do not call a paid model service.
+
+Keep recordings read-only and human review saves explicit. Preserve time precision, source provenance and missing-data masks. Test credential redaction, interrupted jobs and cache invalidation when changing the review pipeline. Describe behavior and verification in pull requests.
+
+The UI uses one font family throughout. Page titles are 24 px, dialog and stage titles 18 px, body and section text 14 px, controls 13 px and annotations 12 px. Use tabular digits for times; reserve monospace for raw structured data. Playback and review panels share a timeline.
+
+Do not commit credentials, recordings, private screenshots, databases, generated caches or experiment outputs. See [license status](LICENSE_STATUS.md) and [source packaging](docs/SOURCE_PACKAGE.md).

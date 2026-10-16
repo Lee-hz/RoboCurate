@@ -79,20 +79,6 @@ def test_review_guard_keeps_raw_uncertainty_without_changing_predictions(monkeyp
     assert not unguarded['guard_review'].any()
 
 
-def test_random_walk_soft_targets_no_extrapolation_or_gap_crossing():
-    source=Path(__file__).resolve().parents[1]/'research/stage_v3_20260917/train.py'
-    if not source.is_file():pytest.skip('stage-training source is missing')
-    spec=importlib.util.spec_from_file_location('v3_training_test',source)
-    study=importlib.util.module_from_spec(spec);spec.loader.exec_module(study)
-    y=np.array([-1,0,-1,-1,-1,1,-1]);row=dict(y=y,camera_valid=np.ones((7,2),bool),state_valid=np.ones(7,bool))
-    target,weak=study.random_walk_targets(row,np.ones(6),1.)
-    assert weak.tolist()==[False,False,True,True,True,False,False]
-    np.testing.assert_allclose(target[weak].sum(1),1.)
-    np.testing.assert_allclose(target[3,:2],[.5,.5])
-    assert np.all(target[[0,6]]==0)
-    row['state_valid'][3]=False
-    _,weak=study.random_walk_targets(row,np.ones(6),1.)
-    assert not weak.any()
 
 
 def test_v3_request_includes_measured_state_and_keeps_missing_view_review(real_library):

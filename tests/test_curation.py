@@ -8,18 +8,7 @@ from scipy.special import digamma
 from curation.learning import ksg_local,BC
 from curation.ranking import rank_scores,eligibility,choose_records,stratify
 
-def curation_reference_root():
-    bundled=Path(__file__).resolve().parent/'reference/curation_20260930'
-    return bundled if bundled.is_dir() else Path(__file__).resolve().parents[2]/'research/curation_20260930'
 
-def test_official_ksg_numeric_parity():
-    source=curation_reference_root()/'upstream-deminf/scripts/quality/quality_estimators.py'
-    if not source.is_file():pytest.skip('Optional upstream research snapshot is not distributed')
-    tree=ast.parse(source.read_text());selected=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ['_l2_dists','ksg_estimator']],type_ignores=[])
-    namespace={'jnp':np,'digamma':digamma,'jax':SimpleNamespace(random=SimpleNamespace(split=lambda r:(0,1)))};exec(compile(selected,str(source),'exec'),namespace)
-    rng=np.random.default_rng(5);s=rng.normal(size=(100,12));a=rng.normal(size=(100,6));alg=SimpleNamespace(predict=lambda state,batch,rng:state)
-    expected=namespace['ksg_estimator']({},0,np.arange(5,8),alg,s,alg,a)
-    np.testing.assert_allclose(ksg_local(s,a),expected,atol=1e-12)
 
 def test_gradient_cosine_matches_autograd():
     torch.manual_seed(10);m=BC(5,3);x=torch.randn(2,5);target=torch.randn(2,3);grad=[]
@@ -79,16 +68,3 @@ def test_original_workbench_has_only_one_quality_score():
     q=project_quality(old,dict(grade='C',score=2.4))
     assert q['score']==2.4 and q['rating']['max_score']==10
     assert old['score']==99
-
-def test_qualified_model_inputs_exclude_failed_incomplete_and_unknown():
-    import json
-    root=curation_reference_root()
-    for domain,n in [('sim',21),('real',10)]:
-        name=f'local-{domain}-qualified-v2'
-        rows=json.loads((root/(name+'.json')).read_text())
-        admission=json.loads((root/(name+'-admission.json')).read_text())
-        arrays=np.load(root/(name+'.npz'))
-        assert len(rows)==n and all(eligibility(r,domain)[0]=='candidate' for r in rows)
-        assert set(arrays['owners'])==set(range(n))
-        assert {r['id'] for r in rows}==set(admission['eligible'])
-        assert not set(admission['eligible']) & {r['id'] for r in admission['excluded']}

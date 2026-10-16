@@ -65,23 +65,3 @@ def test_incomplete_sample_invalidates_whole_motion_step():
     t=np.arange(5)*50_000_000;x=np.ones((5,3));x[2,1]=np.inf
     r=motion_facts(t,x)
     assert r['valid_step_count']==2 and r['non_finite_value_count']==1
-
-
-def test_reference_parity_for_finite_trajectories_and_penalties():
-    root=Path(__file__).resolve().parents[1]
-    if not (root/'workspace/references/snapshots/hflow/src/hflow/checks.py').exists():
-        pytest.skip('fetch the hash-pinned upstream source snapshots for parity checks')
-    sys.path.insert(0,str(root/'experiments/quality_validation'))
-    from upstream import motion_reference, spacing_reference, score_reference
-    motion=motion_reference();spacing=spacing_reference();score=score_reference()
-    rng=np.random.default_rng(903)
-    for _ in range(20):
-        t=np.arange(80)*50_000_000;x=np.cumsum(rng.normal(size=(80,7)),axis=0)
-        a=motion(t,x);b=motion_facts(t,x)
-        for key in ['mean_velocity','trajectory_change_p95','final_pose_unsettled_ratio']:
-            assert b[key]==pytest.approx(a[key])
-    for levels in itertools.product(['PASS','WARN','FAIL','ERROR'],repeat=3):
-        checks=[dict(severity=v) for v in levels]
-        if any(v!='ERROR' for v in levels):assert integrity_summary(checks)['score']==score(checks)
-    t=np.arange(100)/20;t[1:]+=.0002;t[70:]+=.11
-    assert spacing(t,20)=='WARN' and fixed_spacing(t,20)['severity']=='FAIL'
